@@ -147,49 +147,74 @@ function escapeHTML(str) {
 
 
 // ========================================
-// 清除評語多餘空白
+// ⭐ 清除教師評語多餘空白
 // ========================================
 
-function cleanFeedbackText(str) {
+function cleanFeedbackText(text) {
 
-    if (!str) return "";
+    if (!text) {
+        return "";
+    }
 
-    return String(str)
 
-        // 每一行前後的空白刪除
-        .split(/\r?\n/)
-        .map(function(line) {
+    return String(text)
 
-            return line.trim();
+        // 把 Windows 換行統一
+        .replace(/\r\n/g, "\n")
 
-        })
+        // 把單獨的 \r 統一
+        .replace(/\r/g, "\n")
 
-        // 刪除最前面與最後面的空白行
-        .join("\n")
+        // 清除每一行最前面的空白
+        .replace(/^[ \t]+/gm, "")
+
+        // 清除每一行最後面的空白
+        .replace(/[ \t]+$/gm, "")
+
+        // 最前面多餘空白行刪掉
+        .replace(/^\n+/, "")
+
+        // 最後面多餘空白行刪掉
+        .replace(/\n+$/, "")
+
+        // 避免連續太多空白行
+        .replace(/\n{3,}/g, "\n\n")
 
         .trim();
 
 }
 
 
+// ========================================
+// 日期格式
+// ========================================
+
 function formatDate(date) {
 
-    const y = date.getFullYear();
+    const y =
+        date.getFullYear();
+
 
     const m =
         String(
             date.getMonth() + 1
         ).padStart(2, "0");
 
+
     const d =
         String(
             date.getDate()
         ).padStart(2, "0");
 
+
     return `${y}-${m}-${d}`;
 
 }
 
+
+// ========================================
+// 時間格式
+// ========================================
 
 function formatTime(date) {
 
@@ -198,17 +223,133 @@ function formatTime(date) {
             date.getHours()
         ).padStart(2, "0");
 
+
     const m =
         String(
             date.getMinutes()
         ).padStart(2, "0");
+
 
     const s =
         String(
             date.getSeconds()
         ).padStart(2, "0");
 
+
     return `${h}:${m}:${s}`;
+
+}
+
+
+// ========================================
+// ⭐ 教師評語日期解析
+// ========================================
+
+function parseFeedbackDate(dateValue) {
+
+    if (
+        dateValue === null ||
+        dateValue === undefined ||
+        dateValue === ""
+    ) {
+
+        return 0;
+
+    }
+
+
+    let value =
+        String(dateValue)
+            .trim();
+
+
+    // ------------------------------------
+    // Google Sheet 常見格式
+    // 2026/09/08
+    // 2026-09-08
+    // ------------------------------------
+
+    value =
+        value.replace(
+            /\//g,
+            "-"
+        );
+
+
+    // ------------------------------------
+    // 如果是
+    // 2026-09-08 10:30:00
+    // ------------------------------------
+
+    const match =
+        value.match(
+            /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+        );
+
+
+    if (match) {
+
+        const year =
+            Number(match[1]);
+
+
+        const month =
+            Number(match[2]);
+
+
+        const day =
+            Number(match[3]);
+
+
+        const hour =
+            Number(match[4] || 0);
+
+
+        const minute =
+            Number(match[5] || 0);
+
+
+        const second =
+            Number(match[6] || 0);
+
+
+        return new Date(
+            year,
+            month - 1,
+            day,
+            hour,
+            minute,
+            second
+        ).getTime();
+
+    }
+
+
+    // ------------------------------------
+    // 嘗試一般日期格式
+    // ------------------------------------
+
+    const parsed =
+        new Date(value);
+
+
+    if (
+        !isNaN(
+            parsed.getTime()
+        )
+    ) {
+
+        return parsed.getTime();
+
+    }
+
+
+    // ------------------------------------
+    // 無法解析
+    // 放到最後面
+    // ------------------------------------
+
+    return 0;
 
 }
 
@@ -223,8 +364,11 @@ function showHome() {
 
     selectedWorkplace = "";
 
+
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
@@ -233,17 +377,21 @@ function showHome() {
             TAS 打卡系統
         </h1>
 
+
         <h2>
             Welcome! 歡迎使用！
         </h2>
+
 
         <p>
             Please select your name！
         </p>
 
+
         <p>
             選擇你的名字！
         </p>
+
 
         <div
             class="student-grid"
@@ -254,14 +402,18 @@ function showHome() {
 
 
     const container =
-        document.getElementById("students");
+        document.getElementById(
+            "students"
+        );
 
 
     students.forEach(
         (student, index) => {
 
             const button =
-                document.createElement("button");
+                document.createElement(
+                    "button"
+                );
 
 
             button.textContent =
@@ -272,13 +424,17 @@ function showHome() {
                 "click",
                 () => {
 
-                    showBirthdayVerification(index);
+                    showBirthdayVerification(
+                        index
+                    );
 
                 }
             );
 
 
-            container.appendChild(button);
+            container.appendChild(
+                button
+            );
 
         }
     );
@@ -297,18 +453,26 @@ function showBirthdayVerification(index) {
 
 
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
 
         <h1>
-            Hello ${escapeHTML(currentStudent.name)}! 👋
+            Hello
+            ${escapeHTML(
+                currentStudent.name
+            )}
+            ! 👋
         </h1>
+
 
         <h2>
             Select your birthday
         </h2>
+
 
         <p>
             請選擇你的生日
@@ -362,7 +526,9 @@ function showBirthdayVerification(index) {
 
 
     document
-        .getElementById("verifyButton")
+        .getElementById(
+            "verifyButton"
+        )
         .addEventListener(
             "click",
             verifyBirthday
@@ -370,7 +536,9 @@ function showBirthdayVerification(index) {
 
 
     document
-        .getElementById("backButton")
+        .getElementById(
+            "backButton"
+        )
         .addEventListener(
             "click",
             showHome
@@ -395,9 +563,11 @@ function createMonthOptions() {
     ) {
 
         html += `
+
             <option value="${i}">
                 ${i} 月
             </option>
+
         `;
 
     }
@@ -424,9 +594,11 @@ function createDayOptions() {
     ) {
 
         html += `
+
             <option value="${i}">
                 ${i} 日
             </option>
+
         `;
 
     }
@@ -446,7 +618,9 @@ function verifyBirthday() {
     const month =
         Number(
             document
-                .getElementById("month")
+                .getElementById(
+                    "month"
+                )
                 .value
         );
 
@@ -454,22 +628,29 @@ function verifyBirthday() {
     const day =
         Number(
             document
-                .getElementById("day")
+                .getElementById(
+                    "day"
+                )
                 .value
         );
 
 
     const error =
-        document.getElementById("error");
+        document.getElementById(
+            "error"
+        );
 
 
     if (
-        month === currentStudent.birthdayMonth
+        month ===
+            currentStudent.birthdayMonth
         &&
-        day === currentStudent.birthdayDay
+        day ===
+            currentStudent.birthdayDay
     ) {
 
-        error.textContent = "";
+        error.textContent =
+            "";
 
         showMainMenu();
 
@@ -495,7 +676,9 @@ function showMainMenu() {
 
 
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
@@ -506,7 +689,10 @@ function showMainMenu() {
 
 
         <h2>
-            ${escapeHTML(currentStudent.name)} 👋
+            ${escapeHTML(
+                currentStudent.name
+            )}
+            👋
         </h2>
 
 
@@ -552,7 +738,9 @@ function showMainMenu() {
 
 
     document
-        .getElementById("startWorkButton")
+        .getElementById(
+            "startWorkButton"
+        )
         .addEventListener(
             "click",
             showStartWork
@@ -560,7 +748,9 @@ function showMainMenu() {
 
 
     document
-        .getElementById("lunchButton")
+        .getElementById(
+            "lunchButton"
+        )
         .addEventListener(
             "click",
             showLunch
@@ -568,7 +758,9 @@ function showMainMenu() {
 
 
     document
-        .getElementById("finishWorkButton")
+        .getElementById(
+            "finishWorkButton"
+        )
         .addEventListener(
             "click",
             showFinishWork
@@ -576,7 +768,9 @@ function showMainMenu() {
 
 
     document
-        .getElementById("feedbackButton")
+        .getElementById(
+            "feedbackButton"
+        )
         .addEventListener(
             "click",
             showFeedback
@@ -584,7 +778,9 @@ function showMainMenu() {
 
 
     document
-        .getElementById("logoutButton")
+        .getElementById(
+            "logoutButton"
+        )
         .addEventListener(
             "click",
             showHome
@@ -603,7 +799,9 @@ function showStartWork() {
 
 
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
@@ -672,7 +870,9 @@ function showStartWork() {
 
 
     document
-        .getElementById("storeButton")
+        .getElementById(
+            "storeButton"
+        )
         .addEventListener(
             "click",
             () => chooseWorkplace("門市")
@@ -680,7 +880,9 @@ function showStartWork() {
 
 
     document
-        .getElementById("restaurantButton")
+        .getElementById(
+            "restaurantButton"
+        )
         .addEventListener(
             "click",
             () => chooseWorkplace("餐飲")
@@ -688,7 +890,9 @@ function showStartWork() {
 
 
     document
-        .getElementById("hospitalButton")
+        .getElementById(
+            "hospitalButton"
+        )
         .addEventListener(
             "click",
             () => chooseWorkplace("醫院")
@@ -696,7 +900,9 @@ function showStartWork() {
 
 
     document
-        .getElementById("cleaningButton")
+        .getElementById(
+            "cleaningButton"
+        )
         .addEventListener(
             "click",
             () => chooseWorkplace("清潔")
@@ -704,7 +910,9 @@ function showStartWork() {
 
 
     document
-        .getElementById("clockInButton")
+        .getElementById(
+            "clockInButton"
+        )
         .addEventListener(
             "click",
             clockIn
@@ -712,7 +920,9 @@ function showStartWork() {
 
 
     document
-        .getElementById("backMenuButton")
+        .getElementById(
+            "backMenuButton"
+        )
         .addEventListener(
             "click",
             showMainMenu
@@ -847,7 +1057,9 @@ async function clockIn() {
                     },
 
                     body:
-                        JSON.stringify(payload)
+                        JSON.stringify(
+                            payload
+                        )
 
                 }
             );
@@ -871,9 +1083,11 @@ async function clockIn() {
                     ✅ Clock-in completed!
                 </h2>
 
+
                 <p>
                     打卡成功！
                 </p>
+
 
                 <p>
                     Student:
@@ -882,6 +1096,7 @@ async function clockIn() {
                     )}
                 </p>
 
+
                 <p>
                     Workplace:
                     ${escapeHTML(
@@ -889,10 +1104,12 @@ async function clockIn() {
                     )}
                 </p>
 
+
                 <p>
                     Date:
                     ${formatDate(now)}
                 </p>
+
 
                 <p>
                     Time:
@@ -927,7 +1144,6 @@ async function clockIn() {
                 showMainMenu
             );
 
-
     }
 
     catch (error) {
@@ -954,6 +1170,7 @@ async function clockIn() {
                     ❌ 打卡失敗
                 </h2>
 
+
                 <p>
                     ${escapeHTML(
                         error.message
@@ -976,7 +1193,9 @@ async function clockIn() {
 function showLunch() {
 
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
@@ -1085,14 +1304,18 @@ async function saveLunch() {
 
     const food =
         document
-            .getElementById("food")
+            .getElementById(
+                "food"
+            )
             .value
             .trim();
 
 
     const cost =
         document
-            .getElementById("cost")
+            .getElementById(
+                "cost"
+            )
             .value
             .trim();
 
@@ -1203,7 +1426,9 @@ async function saveLunch() {
                     },
 
                     body:
-                        JSON.stringify(payload)
+                        JSON.stringify(
+                            payload
+                        )
 
                 }
             );
@@ -1243,13 +1468,17 @@ async function saveLunch() {
 
                 <p>
                     Food:
-                    ${escapeHTML(food)}
+                    ${escapeHTML(
+                        food
+                    )}
                 </p>
 
 
                 <p>
                     Cost:
-                    $${escapeHTML(cost)}
+                    $${escapeHTML(
+                        cost
+                    )}
                 </p>
 
 
@@ -1335,7 +1564,9 @@ async function saveLunch() {
 function showFinishWork() {
 
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
@@ -1490,7 +1721,9 @@ async function clockOut() {
                     },
 
                     body:
-                        JSON.stringify(payload)
+                        JSON.stringify(
+                            payload
+                        )
 
                 }
             );
@@ -1616,7 +1849,9 @@ async function clockOut() {
 function showFeedback() {
 
     const app =
-        document.getElementById("app");
+        document.getElementById(
+            "app"
+        );
 
 
     app.innerHTML = `
@@ -1762,11 +1997,12 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 找出全部同姓名資料
+        // 找出目前學生的所有評語
         // ====================================
 
         const records =
             data
+
                 .map(
                     function(record) {
 
@@ -1786,7 +2022,8 @@ async function fetchFeedback() {
                             .trim();
 
 
-                        // ⭐ 清除評語多餘空白
+                        // ⭐ 清除評語前後及每行多餘空格
+
                         const feedback =
                             cleanFeedbackText(
                                 record.feedback ||
@@ -1810,6 +2047,7 @@ async function fetchFeedback() {
 
                     }
                 )
+
                 .filter(
                     function(record) {
 
@@ -1888,6 +2126,39 @@ async function fetchFeedback() {
 
 
         // ====================================
+        // ⭐⭐⭐ 最重要的排序 ⭐⭐⭐
+        //
+        // 最新日期 → 最舊日期
+        // ====================================
+
+        records.sort(
+            function(a, b) {
+
+                const dateA =
+                    parseFeedbackDate(
+                        a.date
+                    );
+
+
+                const dateB =
+                    parseFeedbackDate(
+                        b.date
+                    );
+
+
+                return dateB - dateA;
+
+            }
+        );
+
+
+        console.log(
+            "⭐ 排序後評語：",
+            records
+        );
+
+
+        // ====================================
         // ⭐ 依日期分組
         // ====================================
 
@@ -1902,24 +2173,31 @@ async function fetchFeedback() {
                     "日期未提供";
 
 
-                // 統一日期格式
                 displayDate =
                     String(displayDate)
                         .trim()
-                        .replace(/\//g, "-");
+                        .replace(
+                            /\//g,
+                            "-"
+                        );
 
 
                 if (
-                    !groupedRecords[displayDate]
+                    !groupedRecords[
+                        displayDate
+                    ]
                 ) {
 
-                    groupedRecords[displayDate] = [];
+                    groupedRecords[
+                        displayDate
+                    ] = [];
 
                 }
 
 
-                groupedRecords[displayDate]
-                    .push(record);
+                groupedRecords[
+                    displayDate
+                ].push(record);
 
             }
         );
@@ -1927,7 +2205,7 @@ async function fetchFeedback() {
 
         // ====================================
         // ⭐ 日期排序
-        // 最新日期在最上面
+        // 最新 → 最舊
         // ====================================
 
         const sortedDates =
@@ -1937,14 +2215,18 @@ async function fetchFeedback() {
             .sort(
                 function(a, b) {
 
-                    return b.localeCompare(a);
+                    return (
+                        parseFeedbackDate(b)
+                        -
+                        parseFeedbackDate(a)
+                    );
 
                 }
             );
 
 
         // ====================================
-        // ⭐ 建立評語 HTML
+        // 建立評語卡片
         // ====================================
 
         let feedbackHTML =
@@ -1955,7 +2237,9 @@ async function fetchFeedback() {
             function(date) {
 
                 const dateRecords =
-                    groupedRecords[date];
+                    groupedRecords[
+                        date
+                    ];
 
 
                 // ====================================
@@ -2039,26 +2323,21 @@ async function fetchFeedback() {
                                 </div>
 
 
+                                <!--
+                                    ⭐ 評語文字
+                                    不使用 pre-wrap，
+                                    避免 Google Sheet
+                                    裡面的縮排空格被帶出來
+                                -->
+
                                 <div
                                     style="
                                         font-size:16px;
                                         color:#1e293b;
-                                        line-height:1.6;
-
-                                        /* ⭐
-                                           不再把多餘空白
-                                           撐開
-                                        */
+                                        line-height:1.7;
                                         white-space:pre-line;
-
-                                        /* ⭐
-                                           自動處理長文字
-                                        */
-                                        overflow-wrap:
-                                            break-word;
-
-                                        word-break:
-                                            break-word;
+                                        overflow-wrap:break-word;
+                                        word-break:break-word;
                                     "
                                 >
                                     ${escapeHTML(
@@ -2075,7 +2354,7 @@ async function fetchFeedback() {
 
 
                 // ====================================
-                // 關閉日期群組
+                // 關閉日期區塊
                 // ====================================
 
                 feedbackHTML += `
@@ -2089,10 +2368,11 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 寫入頁面
+        // ⭐ 寫入頁面
         // ====================================
 
         message.className = "";
+
 
         message.innerHTML = `
 
@@ -2128,6 +2408,7 @@ async function fetchFeedback() {
             <h2>
                 ❌ 讀取評語失敗
             </h2>
+
 
             <p>
                 ${escapeHTML(
