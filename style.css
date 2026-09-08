@@ -1,0 +1,411 @@
+/* ========================================
+   TAS 打卡系統
+   ======================================== */
+
+
+* {
+    box-sizing: border-box;
+}
+
+
+body {
+
+    margin: 0;
+
+    min-height: 100vh;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Helvetica Neue",
+        Arial,
+        sans-serif;
+
+    background:
+        linear-gradient(
+            135deg,
+            #f5f9ff,
+            #ffffff
+        );
+
+    color: #222;
+
+}
+
+
+/* ========================================
+   主容器
+   ======================================== */
+
+#app {
+
+    width: 100%;
+
+    max-width: 700px;
+
+    margin: 0 auto;
+
+    padding:
+        40px 20px 60px;
+
+    text-align: center;
+
+}
+
+
+/* ========================================
+   標題
+   ======================================== */
+
+h1 {
+
+    margin-top: 10px;
+
+    margin-bottom: 15px;
+
+    font-size: 38px;
+
+    font-weight: 800;
+
+}
+
+
+h2 {
+
+    margin-top: 10px;
+
+    margin-bottom: 15px;
+
+    font-size: 27px;
+
+}
+
+
+p {
+
+    font-size: 20px;
+
+    line-height: 1.6;
+
+}
+
+
+/* ========================================
+   學生按鈕 Grid
+   ======================================== */
+
+.student-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, 1fr);
+
+    gap: 15px;
+
+    margin-top: 30px;
+
+}
+
+
+/* ========================================
+   所有按鈕
+   ======================================== */
+
+button {
+
+    border: none;
+
+    border-radius: 18px;
+
+    padding: 18px 20px;
+
+    min-height: 60px;
+
+    font-size: 20px;
+
+    font-weight: 600;
+
+    background:
+        rgba(0, 110, 255, 0.12);
+
+    color: #1456a0;
+
+    cursor: pointer;
+
+    transition:
+        transform 0.15s ease,
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+
+}
+
+
+button:hover {
+
+    background:
+        rgba(0, 110, 255, 0.22);
+
+    transform:
+        translateY(-2px);
+
+    box-shadow:
+        0 5px 15px
+        rgba(0, 0, 0, 0.08);
+
+}
+
+
+button:active {
+
+    transform:
+        scale(0.97);
+
+}
+
+
+/* ========================================
+   主選單
+   ======================================== */
+
+.menu {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 15px;
+
+    margin-top: 30px;
+
+}
+
+
+.menu button {
+
+    width: 100%;
+
+    min-height: 85px;
+
+    font-size: 23px;
+
+}
+
+
+/* ========================================
+   工作場所
+   ======================================== */
+
+.workplace-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, 1fr);
+
+    gap: 15px;
+
+    margin-top: 25px;
+
+}
+
+
+.workplace-grid button {
+
+    min-height: 90px;
+
+    font-size: 22px;
+
+}
+
+
+/* ========================================
+   下拉選單
+   ======================================== */
+
+select {
+
+    width: 130px;
+
+    padding: 14px;
+
+    margin: 8px;
+
+    border:
+        2px solid #d5dce5;
+
+    border-radius: 12px;
+
+    background: white;
+
+    font-size: 20px;
+
+    text-align: center;
+
+}
+
+
+/* ========================================
+   輸入框
+   ======================================== */
+
+input {
+
+    width: 100%;
+
+    padding: 15px;
+
+    margin-top: 8px;
+
+    border:
+        2px solid #d5dce5;
+
+    border-radius: 12px;
+
+    font-size: 20px;
+
+    outline: none;
+
+}
+
+
+input:focus {
+
+    border-color: #4285f4;
+
+}
+
+
+/* ========================================
+   錯誤訊息
+   ======================================== */
+
+.error {
+
+    margin-top: 20px;
+
+    color: #d93025;
+
+    font-size: 20px;
+
+    font-weight: 600;
+
+}
+
+
+/* ========================================
+   成功訊息
+   ======================================== */
+
+.success {
+
+    margin-top: 25px;
+
+    padding: 20px;
+
+    background:
+        rgba(52, 199, 89, 0.12);
+
+    border-radius: 18px;
+
+}
+
+
+.success h2 {
+
+    color: #1b8a3d;
+
+}
+
+
+/* ========================================
+   載入中
+   ======================================== */
+
+.loading {
+
+    margin-top: 30px;
+
+    font-size: 22px;
+
+}
+
+
+/* ========================================
+   手機版
+   ======================================== */
+
+@media (max-width: 600px) {
+
+    #app {
+
+        padding:
+            25px 15px 50px;
+
+    }
+
+
+    h1 {
+
+        font-size: 32px;
+
+    }
+
+
+    h2 {
+
+        font-size: 24px;
+
+    }
+
+
+    p {
+
+        font-size: 18px;
+
+    }
+
+
+    .student-grid {
+
+        grid-template-columns:
+            1fr 1fr;
+
+        gap: 10px;
+
+    }
+
+
+    .student-grid button {
+
+        font-size: 18px;
+
+        padding: 14px 8px;
+
+    }
+
+
+    .workplace-grid {
+
+        grid-template-columns:
+            1fr 1fr;
+
+        gap: 10px;
+
+    }
+
+
+    .workplace-grid button {
+
+        font-size: 19px;
+
+    }
+
+
+    .menu button {
+
+        font-size: 20px;
+
+    }
+
+}
