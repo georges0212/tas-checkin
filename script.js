@@ -1847,83 +1847,187 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 建立評語卡片 HTML
+        // ⭐ 依日期分組
+        // ====================================
+
+        const groupedRecords = {};
+
+
+        records.forEach(
+            function(record) {
+
+                let displayDate =
+                    record.date ||
+                    "日期未提供";
+
+
+                // ----------------------------
+                // 統一日期格式
+                // ----------------------------
+
+                displayDate =
+                    String(displayDate)
+                        .trim()
+                        .replace(/\//g, "-");
+
+
+                if (
+                    !groupedRecords[displayDate]
+                ) {
+
+                    groupedRecords[displayDate] = [];
+
+                }
+
+
+                groupedRecords[displayDate]
+                    .push(record);
+
+            }
+        );
+
+
+        // ====================================
+        // ⭐ 日期排序
+        // 最新日期在最上面
+        // ====================================
+
+        const sortedDates =
+            Object.keys(
+                groupedRecords
+            )
+            .sort(
+                function(a, b) {
+
+                    return b.localeCompare(a);
+
+                }
+            );
+
+
+        // ====================================
+        // ⭐ 建立評語 HTML
         // ====================================
 
         let feedbackHTML =
             "";
 
 
-        records.forEach(
-            function(record, index) {
+        sortedDates.forEach(
+            function(date) {
 
-                const displayDate =
-                    record.date ||
-                    "日期未提供";
+                const dateRecords =
+                    groupedRecords[date];
 
+
+                // ====================================
+                // 日期標題
+                // ====================================
 
                 feedbackHTML += `
 
                     <div
                         style="
-                            background:#ffffff;
-                            padding:20px;
-                            margin-bottom:16px;
-                            border-radius:16px;
-                            border:1px solid #dbeafe;
-                            box-shadow:
-                                0 3px 10px
-                                rgba(0,0,0,0.07);
-                            text-align:left;
+                            margin-bottom:30px;
                         "
                     >
 
-                        <!-- 評語編號 -->
-
                         <div
                             style="
-                                color:#64748b;
-                                font-size:13px;
-                                margin-bottom:10px;
+                                background:
+                                    linear-gradient(
+                                        135deg,
+                                        #2563eb,
+                                        #3b82f6
+                                    );
+                                color:white;
+                                padding:14px 20px;
+                                border-radius:14px;
+                                font-size:18px;
+                                font-weight:bold;
+                                margin-bottom:14px;
+                                box-shadow:
+                                    0 3px 10px
+                                    rgba(
+                                        37,
+                                        99,
+                                        235,
+                                        0.20
+                                    );
                             "
                         >
-                            💬 評語 ${index + 1}
+                            📅 ${escapeHTML(date)}
                         </div>
 
-
-                        <!-- 日期標籤 -->
-
-                        <div
-                            style="
-                                display:inline-block;
-                                background:#eff6ff;
-                                color:#1d4ed8;
-                                padding:6px 12px;
-                                border-radius:20px;
-                                font-size:14px;
-                                margin-bottom:12px;
-                            "
-                        >
-                            📅 ${escapeHTML(
-                                displayDate
-                            )}
-                        </div>
+                `;
 
 
-                        <!-- 評語內容 -->
+                // ====================================
+                // 該日期的所有評語
+                // ====================================
 
-                        <div
-                            style="
-                                font-size:16px;
-                                color:#1e293b;
-                                line-height:1.6;
-                                white-space:pre-wrap;
-                            "
-                        >
-                            ${escapeHTML(
-                                record.feedback
-                            )}
-                        </div>
+                dateRecords.forEach(
+                    function(record, index) {
+
+                        feedbackHTML += `
+
+                            <div
+                                style="
+                                    background:#ffffff;
+                                    padding:20px;
+                                    margin-bottom:12px;
+                                    border-radius:16px;
+                                    border:1px solid #dbeafe;
+                                    box-shadow:
+                                        0 3px 10px
+                                        rgba(
+                                            0,
+                                            0,
+                                            0,
+                                            0.07
+                                        );
+                                    text-align:left;
+                                "
+                            >
+
+                                <div
+                                    style="
+                                        color:#64748b;
+                                        font-size:13px;
+                                        margin-bottom:10px;
+                                    "
+                                >
+                                    💬 ${escapeHTML(date)}
+                                    的第 ${index + 1} 則評語
+                                </div>
+
+
+                                <div
+                                    style="
+                                        font-size:16px;
+                                        color:#1e293b;
+                                        line-height:1.6;
+                                        white-space:pre-wrap;
+                                    "
+                                >
+                                    ${escapeHTML(
+                                        record.feedback
+                                    )}
+                                </div>
+
+                            </div>
+
+                        `;
+
+                    }
+                );
+
+
+                // ====================================
+                // 關閉日期群組
+                // ====================================
+
+                feedbackHTML += `
 
                     </div>
 
@@ -1934,15 +2038,24 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 寫入頁面
+        // ⭐ 寫入頁面
         // ====================================
 
         message.className = "";
 
         message.innerHTML = `
-            <div style="max-width:600px; margin:0 auto;">
+
+            <div
+                style="
+                    max-width:600px;
+                    margin:0 auto;
+                "
+            >
+
                 ${feedbackHTML}
+
             </div>
+
         `;
 
     }
@@ -1954,11 +2067,23 @@ async function fetchFeedback() {
             error
         );
 
-        message.className = "error";
+
+        message.className =
+            "error";
+
 
         message.innerHTML = `
-            <h2>❌ 讀取評語失敗</h2>
-            <p>${escapeHTML(error.message)}</p>
+
+            <h2>
+                ❌ 讀取評語失敗
+            </h2>
+
+            <p>
+                ${escapeHTML(
+                    error.message
+                )}
+            </p>
+
         `;
 
     }
@@ -1970,4 +2095,7 @@ async function fetchFeedback() {
 // 初始化頁面
 // ========================================
 
-document.addEventListener("DOMContentLoaded", showHome);
+document.addEventListener(
+    "DOMContentLoaded",
+    showHome
+);
