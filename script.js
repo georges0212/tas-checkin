@@ -129,6 +129,50 @@ let selectedWorkplace = "";
 
 
 // ========================================
+// 輔助工具函式
+// ========================================
+
+function escapeHTML(str) {
+
+    if (!str) return "";
+
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+}
+
+
+function formatDate(date) {
+
+    const y = date.getFullYear();
+
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+
+    const d = String(date.getDate()).padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+
+}
+
+
+function formatTime(date) {
+
+    const h = String(date.getHours()).padStart(2, "0");
+
+    const m = String(date.getMinutes()).padStart(2, "0");
+
+    const s = String(date.getSeconds()).padStart(2, "0");
+
+    return `${h}:${m}:${s}`;
+
+}
+
+
+// ========================================
 // 首頁
 // ========================================
 
@@ -218,7 +262,7 @@ function showBirthdayVerification(index) {
     app.innerHTML = `
 
         <h1>
-            Hello ${currentStudent.name}! 👋
+            Hello ${escapeHTML(currentStudent.name)}! 👋
         </h1>
 
         <h2>
@@ -421,7 +465,7 @@ function showMainMenu() {
 
 
         <h2>
-            ${currentStudent.name} 👋
+            ${escapeHTML(currentStudent.name)} 👋
         </h2>
 
 
@@ -437,41 +481,29 @@ function showMainMenu() {
 
         <div class="menu">
 
-
-            <button
-                id="startWorkButton"
-            >
+            <button id="startWorkButton">
                 🟢 Start Work 開始工作
             </button>
 
 
-            <button
-                id="lunchButton"
-            >
+            <button id="lunchButton">
                 🍱 Lunch / Dinner 午餐／晚餐
             </button>
 
 
-            <button
-                id="finishWorkButton"
-            >
+            <button id="finishWorkButton">
                 🔴 Finish Work 打卡下班
             </button>
 
 
-            <button
-                id="feedbackButton"
-            >
+            <button id="feedbackButton">
                 💬 Teacher Feedback 教師評語
             </button>
 
 
-            <button
-                id="logoutButton"
-            >
+            <button id="logoutButton">
                 ⬅ 回到學生選擇
             </button>
-
 
         </div>
 
@@ -552,7 +584,6 @@ function showStartWork() {
 
         <div class="workplace-grid">
 
-
             <button id="storeButton">
                 🛒 門市
             </button>
@@ -571,7 +602,6 @@ function showStartWork() {
             <button id="cleaningButton">
                 🧹 清潔
             </button>
-
 
         </div>
 
@@ -806,12 +836,16 @@ async function clockIn() {
 
                 <p>
                     Student:
-                    ${currentStudent.name}
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
                 </p>
 
                 <p>
                     Workplace:
-                    ${selectedWorkplace}
+                    ${escapeHTML(
+                        selectedWorkplace
+                    )}
                 </p>
 
                 <p>
@@ -880,7 +914,9 @@ async function clockIn() {
                 </h2>
 
                 <p>
-                    ${error.message}
+                    ${escapeHTML(
+                        error.message
+                    )}
                 </p>
 
             </div>
@@ -893,7 +929,7 @@ async function clockIn() {
 
 
 // ========================================
-// 🍱 Lunch / Dinner
+// Lunch / Dinner
 // ========================================
 
 function showLunch() {
@@ -1158,19 +1194,21 @@ async function saveLunch() {
 
                 <p>
                     Student:
-                    ${currentStudent.name}
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
                 </p>
 
 
                 <p>
                     Food:
-                    ${food}
+                    ${escapeHTML(food)}
                 </p>
 
 
                 <p>
                     Cost:
-                    $${cost}
+                    $${escapeHTML(cost)}
                 </p>
 
 
@@ -1235,7 +1273,9 @@ async function saveLunch() {
 
 
                 <p>
-                    ${error.message}
+                    ${escapeHTML(
+                        error.message
+                    )}
                 </p>
 
             </div>
@@ -1248,7 +1288,7 @@ async function saveLunch() {
 
 
 // ========================================
-// 🔴 Finish Work
+// Finish Work
 // ========================================
 
 function showFinishWork() {
@@ -1441,7 +1481,9 @@ async function clockOut() {
 
                 <p>
                     Student:
-                    ${currentStudent.name}
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
                 </p>
 
 
@@ -1512,7 +1554,9 @@ async function clockOut() {
 
 
                 <p>
-                    ${error.message}
+                    ${escapeHTML(
+                        error.message
+                    )}
                 </p>
 
             </div>
@@ -1547,10 +1591,10 @@ function showFeedback() {
 
 
         <div
-            class="loading"
             id="feedbackMessage"
+            class="loading"
         >
-            ⏳ 讀取評語中...
+            ⏳ 讀取所有評語中...
         </div>
 
 
@@ -1595,9 +1639,23 @@ async function fetchFeedback() {
 
     try {
 
+        // ====================================
+        // 防止快取
+        // ====================================
+
+        const url =
+            FEEDBACK_URL +
+            "?nocache=" +
+            Date.now();
+
+
         const response =
             await fetch(
-                FEEDBACK_URL
+                url,
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
             );
 
 
@@ -1616,97 +1674,166 @@ async function fetchFeedback() {
 
 
         console.log(
-            "Teacher Feedback:",
+            "Teacher Feedback API 原始資料：",
             data
         );
 
 
-        // ==================================
-        // 找學生最後一筆有評語的資料
-        // ==================================
+        // ====================================
+        // 確認 API 回傳是不是陣列
+        // ====================================
 
-        const targetName =
-            currentStudent.name
-                .trim();
-
-
-        let matchedRecord =
-            null;
-
-
-        /*
-         * Google 回傳的資料格式：
-         *
-         * [
-         *   {
-         *      studentName: "...",
-         *      date: "...",
-         *      feedback: "..."
-         *   }
-         * ]
-         */
-
-
-        for (
-            let i = data.length - 1;
-            i >= 0;
-            i--
+        if (
+            !Array.isArray(data)
         ) {
 
-            const record =
-                data[i];
-
-
-            const name =
-                String(
-                    record.studentName || ""
-                )
-                .trim();
-
-
-            const feedback =
-                String(
-                    record.feedback || ""
-                )
-                .trim();
-
-
-            if (
-                name === targetName
-                &&
-                feedback !== ""
-            ) {
-
-                matchedRecord =
-                    record;
-
-                break;
-
-            }
+            throw new Error(
+                "Teacher Feedback API 回傳的不是陣列"
+            );
 
         }
 
 
-        // ==================================
+        // ====================================
+        // 確認目前登入學生
+        // ====================================
+
+        if (!currentStudent) {
+
+            throw new Error(
+                "目前沒有登入學生"
+            );
+
+        }
+
+
+        const targetName =
+            String(
+                currentStudent.name
+            )
+            .trim();
+
+
+        console.log(
+            "目前學生：",
+            targetName
+        );
+
+
+        // ====================================
+        // 找出全部同姓名資料
+        // ====================================
+
+        const records =
+            data
+                .map(
+                    function(record) {
+
+                        const studentName =
+                            String(
+                                record.studentName ||
+                                ""
+                            )
+                            .trim();
+
+
+                        const date =
+                            String(
+                                record.date ||
+                                ""
+                            )
+                            .trim();
+
+
+                        const feedback =
+                            String(
+                                record.feedback ||
+                                record.teacherFeedback ||
+                                ""
+                            )
+                            .trim();
+
+
+                        return {
+
+                            studentName:
+                                studentName,
+
+                            date:
+                                date,
+
+                            feedback:
+                                feedback
+
+                        };
+
+                    }
+                )
+                .filter(
+                    function(record) {
+
+                        return (
+
+                            record.studentName ===
+                            targetName
+
+                            &&
+
+                            record.feedback !== ""
+
+                        );
+
+                    }
+                );
+
+
+        console.log(
+            "找到全部評語：",
+            records
+        );
+
+
+        // ====================================
         // 沒有評語
-        // ==================================
+        // ====================================
 
-        if (!matchedRecord) {
+        if (
+            records.length === 0
+        ) {
 
-            message.className =
-                "";
+            message.className = "";
 
 
             message.innerHTML = `
 
-                <div class="success">
+                <div
+                    style="
+                        max-width:600px;
+                        margin:0 auto;
+                        padding:35px 20px;
+                        text-align:center;
+                        background:#f8fafc;
+                        border-radius:18px;
+                        border:1px solid #e2e8f0;
+                    "
+                >
+
+                    <div
+                        style="
+                            font-size:55px;
+                        "
+                    >
+                        💬
+                    </div>
+
 
                     <h2>
-                        💬
+                        目前尚無老師評語
                     </h2>
 
+
                     <p>
-                        目前尚無老師評語喔！
+                        老師還沒有留下評語喔！
                     </p>
 
                 </div>
@@ -1719,56 +1846,103 @@ async function fetchFeedback() {
         }
 
 
-        // ==================================
-        // 顯示評語
-        // ==================================
+        // ====================================
+        // 建立評語卡片 HTML
+        // ====================================
 
-        const feedback =
-            escapeHTML(
-                matchedRecord.feedback
-            );
+        let feedbackHTML =
+            "";
 
 
-        const date =
-            escapeHTML(
-                matchedRecord.date || ""
-            );
+        records.forEach(
+            function(record, index) {
 
+                const displayDate =
+                    record.date ||
+                    "日期未提供";
+
+
+                feedbackHTML += `
+
+                    <div
+                        style="
+                            background:#ffffff;
+                            padding:20px;
+                            margin-bottom:16px;
+                            border-radius:16px;
+                            border:1px solid #dbeafe;
+                            box-shadow:
+                                0 3px 10px
+                                rgba(0,0,0,0.07);
+                            text-align:left;
+                        "
+                    >
+
+                        <!-- 評語編號 -->
+
+                        <div
+                            style="
+                                color:#64748b;
+                                font-size:13px;
+                                margin-bottom:10px;
+                            "
+                        >
+                            💬 評語 ${index + 1}
+                        </div>
+
+
+                        <!-- 日期標籤 -->
+
+                        <div
+                            style="
+                                display:inline-block;
+                                background:#eff6ff;
+                                color:#1d4ed8;
+                                padding:6px 12px;
+                                border-radius:20px;
+                                font-size:14px;
+                                margin-bottom:12px;
+                            "
+                        >
+                            📅 ${escapeHTML(
+                                displayDate
+                            )}
+                        </div>
+
+
+                        <!-- 評語內容 -->
+
+                        <div
+                            style="
+                                font-size:16px;
+                                color:#1e293b;
+                                line-height:1.6;
+                                white-space:pre-wrap;
+                            "
+                        >
+                            ${escapeHTML(
+                                record.feedback
+                            )}
+                        </div>
+
+                    </div>
+
+                `;
+
+            }
+        );
+
+
+        // ====================================
+        // 寫入頁面
+        // ====================================
 
         message.className = "";
 
-
         message.innerHTML = `
-
-            <div class="success">
-
-                <h2>
-                    ${escapeHTML(
-                        currentStudent.name
-                    )}
-                </h2>
-
-
-                ${
-                    date
-                    ?
-                    `<p>
-                        📅 ${date}
-                    </p>`
-                    :
-                    ""
-                }
-
-
-                <hr>
-
-
-                <p>
-                    ${feedback}
-                </p>
-
+            <div style="max-width:600px; margin:0 auto;">
+                ${feedbackHTML}
             </div>
-
         `;
 
     }
@@ -1776,33 +1950,15 @@ async function fetchFeedback() {
     catch (error) {
 
         console.error(
-            "Feedback Error:",
+            "Fetch Feedback Error:",
             error
         );
 
-
-        message.className =
-            "error";
-
+        message.className = "error";
 
         message.innerHTML = `
-
-            <h2>
-                ⚠️ 讀取失敗
-            </h2>
-
-
-            <p>
-                ${error.message}
-            </p>
-
-
-            <p>
-                請確認 Teacher Feedback
-                Google Apps Script
-                已經部署。
-            </p>
-
+            <h2>❌ 讀取評語失敗</h2>
+            <p>${escapeHTML(error.message)}</p>
         `;
 
     }
@@ -1811,109 +1967,7 @@ async function fetchFeedback() {
 
 
 // ========================================
-// 防止評語中的 HTML 影響網頁
+// 初始化頁面
 // ========================================
 
-function escapeHTML(value) {
-
-    const div =
-        document.createElement("div");
-
-
-    div.textContent =
-        String(value);
-
-
-    return div.innerHTML;
-
-}
-
-
-// ========================================
-// 日期
-// ========================================
-
-function formatDate(date) {
-
-    const year =
-        date.getFullYear();
-
-
-    const month =
-        String(
-            date.getMonth() + 1
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    const day =
-        String(
-            date.getDate()
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    return (
-        year +
-        "-" +
-        month +
-        "-" +
-        day
-    );
-
-}
-
-
-// ========================================
-// 時間
-// ========================================
-
-function formatTime(date) {
-
-    const hours =
-        String(
-            date.getHours()
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    const minutes =
-        String(
-            date.getMinutes()
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    const seconds =
-        String(
-            date.getSeconds()
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    return (
-        hours +
-        ":" +
-        minutes +
-        ":" +
-        seconds
-    );
-
-}
-
-
-// ========================================
-// 啟動
-// ========================================
-
-showHome();
+document.addEventListener("DOMContentLoaded", showHome);
