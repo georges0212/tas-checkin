@@ -146,13 +146,45 @@ function escapeHTML(str) {
 }
 
 
+// ========================================
+// 清除評語多餘空白
+// ========================================
+
+function cleanFeedbackText(str) {
+
+    if (!str) return "";
+
+    return String(str)
+
+        // 每一行前後的空白刪除
+        .split(/\r?\n/)
+        .map(function(line) {
+
+            return line.trim();
+
+        })
+
+        // 刪除最前面與最後面的空白行
+        .join("\n")
+
+        .trim();
+
+}
+
+
 function formatDate(date) {
 
     const y = date.getFullYear();
 
-    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const m =
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
 
-    const d = String(date.getDate()).padStart(2, "0");
+    const d =
+        String(
+            date.getDate()
+        ).padStart(2, "0");
 
     return `${y}-${m}-${d}`;
 
@@ -161,11 +193,20 @@ function formatDate(date) {
 
 function formatTime(date) {
 
-    const h = String(date.getHours()).padStart(2, "0");
+    const h =
+        String(
+            date.getHours()
+        ).padStart(2, "0");
 
-    const m = String(date.getMinutes()).padStart(2, "0");
+    const m =
+        String(
+            date.getMinutes()
+        ).padStart(2, "0");
 
-    const s = String(date.getSeconds()).padStart(2, "0");
+    const s =
+        String(
+            date.getSeconds()
+        ).padStart(2, "0");
 
     return `${h}:${m}:${s}`;
 
@@ -1745,13 +1786,13 @@ async function fetchFeedback() {
                             .trim();
 
 
+                        // ⭐ 清除評語多餘空白
                         const feedback =
-                            String(
+                            cleanFeedbackText(
                                 record.feedback ||
                                 record.teacherFeedback ||
                                 ""
-                            )
-                            .trim();
+                            );
 
 
                         return {
@@ -1861,10 +1902,7 @@ async function fetchFeedback() {
                     "日期未提供";
 
 
-                // ----------------------------
                 // 統一日期格式
-                // ----------------------------
-
                 displayDate =
                     String(displayDate)
                         .trim()
@@ -1997,8 +2035,7 @@ async function fetchFeedback() {
                                         margin-bottom:10px;
                                     "
                                 >
-                                    💬 ${escapeHTML(date)}
-                                    的第 ${index + 1} 則評語
+                                    💬 第 ${index + 1} 則評語
                                 </div>
 
 
@@ -2007,7 +2044,21 @@ async function fetchFeedback() {
                                         font-size:16px;
                                         color:#1e293b;
                                         line-height:1.6;
-                                        white-space:pre-wrap;
+
+                                        /* ⭐
+                                           不再把多餘空白
+                                           撐開
+                                        */
+                                        white-space:pre-line;
+
+                                        /* ⭐
+                                           自動處理長文字
+                                        */
+                                        overflow-wrap:
+                                            break-word;
+
+                                        word-break:
+                                            break-word;
                                     "
                                 >
                                     ${escapeHTML(
@@ -2038,7 +2089,7 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // ⭐ 寫入頁面
+        // 寫入頁面
         // ====================================
 
         message.className = "";
