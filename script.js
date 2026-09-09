@@ -1484,15 +1484,7 @@ console.log(
     JSON.stringify(result, null, 2)
 );
 
-if (
-    result.status !==
-    "success"
-) {
 
-    throw new Error(
-        result.message ||
-        "Google Apps Script 儲存失敗"
-    );
 
 }
 
