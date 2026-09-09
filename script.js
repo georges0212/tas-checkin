@@ -128,21 +128,18 @@ let currentStudent = null;
 
 let selectedWorkplace = "";
 
-
-// ========================================
-// ⭐ 工作照片
-// ========================================
-
 let selectedPhotoFile = null;
 
 
 // ========================================
-// 輔助工具
+// HTML 安全處理
 // ========================================
 
 function escapeHTML(str) {
 
-    if (!str) return "";
+    if (!str) {
+        return "";
+    }
 
     return String(str)
         .replace(/&/g, "&amp;")
@@ -165,21 +162,13 @@ function cleanFeedbackText(text) {
     }
 
     return String(text)
-
         .replace(/\r\n/g, "\n")
-
         .replace(/\r/g, "\n")
-
         .replace(/^[ \t]+/gm, "")
-
         .replace(/[ \t]+$/gm, "")
-
         .replace(/^\n+/, "")
-
         .replace(/\n+$/, "")
-
         .replace(/\n{3,}/g, "\n\n")
-
         .trim();
 
 }
@@ -246,20 +235,14 @@ function parseFeedbackDate(dateValue) {
         dateValue === undefined ||
         dateValue === ""
     ) {
-
         return 0;
-
     }
 
     let value =
-        String(dateValue)
-            .trim();
+        String(dateValue).trim();
 
     value =
-        value.replace(
-            /\//g,
-            "-"
-        );
+        value.replace(/\//g, "-");
 
     const match =
         value.match(
@@ -300,14 +283,8 @@ function parseFeedbackDate(dateValue) {
     const parsed =
         new Date(value);
 
-    if (
-        !isNaN(
-            parsed.getTime()
-        )
-    ) {
-
+    if (!isNaN(parsed.getTime())) {
         return parsed.getTime();
-
     }
 
     return 0;
@@ -336,8 +313,8 @@ function compressImage(file) {
                     img.onload =
                         function() {
 
-                            // 最大寬度
-                            const maxWidth = 1600;
+                            const maxWidth =
+                                1600;
 
                             let width =
                                 img.width;
@@ -392,7 +369,6 @@ function compressImage(file) {
                             );
 
 
-                            // JPEG 品質
                             canvas.toBlob(
                                 function(blob) {
 
@@ -468,18 +444,50 @@ function blobToBase64(blob) {
             const reader =
                 new FileReader();
 
+
             reader.onloadend =
                 function() {
 
                     const result =
                         reader.result;
 
+                    if (!result) {
+
+                        reject(
+                            new Error(
+                                "照片轉換失敗"
+                            )
+                        );
+
+                        return;
+
+                    }
+
+
+                    const parts =
+                        result.split(",");
+
+
+                    if (parts.length < 2) {
+
+                        reject(
+                            new Error(
+                                "無法取得照片 Base64"
+                            )
+                        );
+
+                        return;
+
+                    }
+
+
                     const base64 =
-                        result.split(",")[1];
+                        parts[1];
 
                     resolve(base64);
 
                 };
+
 
             reader.onerror =
                 function() {
@@ -491,6 +499,7 @@ function blobToBase64(blob) {
                     );
 
                 };
+
 
             reader.readAsDataURL(blob);
 
@@ -959,7 +968,7 @@ function showStartWork() {
 
 
         <!-- =================================
-             ⭐ 工作照片
+             工作照片
         ================================== -->
 
         <div
@@ -1094,7 +1103,7 @@ function showStartWork() {
 
 
     // ========================================
-    // ⭐ 照片選擇
+    // 照片
     // ========================================
 
     document
@@ -1121,6 +1130,10 @@ function showStartWork() {
         );
 
 
+    // ========================================
+    // 返回
+    // ========================================
+
     document
         .getElementById(
             "backMenuButton"
@@ -1143,13 +1156,19 @@ function chooseWorkplace(workplace) {
         workplace;
 
 
-    document
-        .getElementById(
+    const selected =
+        document.getElementById(
             "selectedWorkplace"
-        )
-        .textContent =
+        );
+
+
+    if (selected) {
+
+        selected.textContent =
             "Selected: " +
             workplace;
+
+    }
 
 
     updateClockInButton();
@@ -1158,7 +1177,7 @@ function chooseWorkplace(workplace) {
 
 
 // ========================================
-// ⭐ 選擇照片
+// 選擇照片
 // ========================================
 
 function handlePhotoSelect(event) {
@@ -1225,7 +1244,7 @@ function handlePhotoSelect(event) {
         escapeHTML(file.name);
 
 
-    // 顯示預覽
+    // 顯示照片預覽
     const reader =
         new FileReader();
 
@@ -1251,7 +1270,7 @@ function handlePhotoSelect(event) {
 
 
 // ========================================
-// ⭐ 控制 Clock In 按鈕
+// 控制 Clock In 按鈕
 // ========================================
 
 function updateClockInButton() {
@@ -1266,10 +1285,6 @@ function updateClockInButton() {
         return;
     }
 
-
-    // 必須同時選擇：
-    // 1. 工作場所
-    // 2. 照片
 
     if (
         selectedWorkplace &&
@@ -1300,6 +1315,10 @@ function updateClockInButton() {
 
 async function clockIn() {
 
+    // ----------------------------------------
+    // 檢查學生
+    // ----------------------------------------
+
     if (!currentStudent) {
 
         alert(
@@ -1310,6 +1329,10 @@ async function clockIn() {
 
     }
 
+
+    // ----------------------------------------
+    // 檢查工作場所
+    // ----------------------------------------
 
     if (!selectedWorkplace) {
 
@@ -1322,7 +1345,9 @@ async function clockIn() {
     }
 
 
-    // ⭐ 強制要求照片
+    // ----------------------------------------
+    // 檢查照片
+    // ----------------------------------------
 
     if (!selectedPhotoFile) {
 
@@ -1351,6 +1376,10 @@ async function clockIn() {
         );
 
 
+    // ----------------------------------------
+    // 開始處理
+    // ----------------------------------------
+
     clockButton.disabled =
         true;
 
@@ -1373,8 +1402,14 @@ async function clockIn() {
     try {
 
         // ====================================
-        // ⭐ 壓縮照片
+        // 1. 壓縮照片
         // ====================================
+
+        console.log(
+            "📷 原始照片大小：",
+            selectedPhotoFile.size
+        );
+
 
         const compressedBlob =
             await compressImage(
@@ -1382,12 +1417,18 @@ async function clockIn() {
             );
 
 
+        console.log(
+            "📷 壓縮後照片大小：",
+            compressedBlob.size
+        );
+
+
         message.innerHTML = `
 
             <div class="loading">
 
                 📷 照片處理完成<br>
-                ⏳ 正在上傳打卡資料...
+                ⏳ 正在準備上傳...
 
             </div>
 
@@ -1395,22 +1436,32 @@ async function clockIn() {
 
 
         // ====================================
-        // ⭐ 轉 Base64
+        // 2. Base64
         // ====================================
 
         const photoBase64 =
-    await blobToBase64(
-        compressedBlob
-    );
+            await blobToBase64(
+                compressedBlob
+            );
 
-console.log("📷 原始照片大小：", selectedPhotoFile.size);
-console.log("📷 壓縮後照片大小：", compressedBlob.size);
-console.log("📷 Base64 長度：", photoBase64.length);
-console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
+
+        console.log(
+            "📷 Base64 長度：",
+            photoBase64.length
+        );
+
+
+        console.log(
+            "📷 Base64 前 50 字元：",
+            photoBase64.substring(
+                0,
+                50
+            )
+        );
 
 
         // ====================================
-        // ⭐ 建立 Payload
+        // 3. 建立 Payload
         // ====================================
 
         const payload = {
@@ -1436,9 +1487,43 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
         };
 
 
+        console.log(
+            "📤 準備傳送 Clock In：",
+            {
+                studentName:
+                    payload.studentName,
+
+                date:
+                    payload.date,
+
+                clockInTime:
+                    payload.clockInTime,
+
+                workplace:
+                    payload.workplace,
+
+                photoBase64Length:
+                    payload.photoBase64.length
+
+            }
+        );
+
+
         // ====================================
-        // ⭐ 傳送 Google Apps Script
+        // 4. 傳送 Google Apps Script
         // ====================================
+
+        message.innerHTML = `
+
+            <div class="loading">
+
+                📤 正在上傳照片與簽到資料...<br>
+                請不要關閉頁面
+
+            </div>
+
+        `;
+
 
         const response =
             await fetch(
@@ -1463,6 +1548,12 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
             );
 
 
+        console.log(
+            "📡 HTTP Status：",
+            response.status
+        );
+
+
         if (!response.ok) {
 
             throw new Error(
@@ -1474,38 +1565,58 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
 
 
         // ====================================
-        // ⭐ 讀取 Google 回傳
+        // 5. 讀取 Google Apps Script 回傳
         // ====================================
+
         const result =
-    await response.json();
-
-console.log(
-    "Google Apps Script 回傳：",
-    JSON.stringify(result, null, 2)
-);
+            await response.json();
 
 
+        console.log(
+            "📥 Google Apps Script 回傳：",
+            result
+        );
 
-}
 
-
+        // ====================================
+        // 6. 判斷成功
+        // ====================================
 
         if (
-            result.status !==
-            "success"
+            !result ||
+            result.success !== true
         ) {
 
             throw new Error(
-                result.message ||
-                "Google Apps Script 儲存失敗"
+                result &&
+                result.message
+                    ? result.message
+                    : "Google Apps Script 儲存失敗"
             );
 
         }
 
 
         // ====================================
-        // ⭐ 成功
+        // 7. 成功
         // ====================================
+
+        console.log(
+            "✅ Clock In 成功"
+        );
+
+
+        console.log(
+            "📷 Drive File ID：",
+            result.photoFileId
+        );
+
+
+        console.log(
+            "📷 Drive URL：",
+            result.photoUrl
+        );
+
 
         message.innerHTML = `
 
@@ -1544,7 +1655,7 @@ console.log(
                 </p>
 
                 <p>
-                    📷 工作照片已上傳
+                    📷 工作照片已成功上傳
                 </p>
 
                 <br>
@@ -1582,7 +1693,7 @@ console.log(
     catch (error) {
 
         console.error(
-            "Clock In Error:",
+            "❌ Clock In Error:",
             error
         );
 
@@ -1607,6 +1718,10 @@ console.log(
                     ${escapeHTML(
                         error.message
                     )}
+                </p>
+
+                <p>
+                    請確認網路連線及 Google Apps Script 設定。
                 </p>
 
             </div>
@@ -1716,10 +1831,21 @@ function showLunch() {
 
 
 // ========================================
-// 儲存午餐
+// 儲存午餐／晚餐
 // ========================================
 
 async function saveLunch() {
+
+    if (!currentStudent) {
+
+        alert(
+            "找不到學生資料"
+        );
+
+        return;
+
+    }
+
 
     const food =
         document
@@ -1861,14 +1987,22 @@ async function saveLunch() {
             await response.json();
 
 
+        console.log(
+            "📥 Lunch 回傳：",
+            result
+        );
+
+
         if (
-            result.status !==
-            "success"
+            !result ||
+            result.success !== true
         ) {
 
             throw new Error(
-                result.message ||
-                "儲存失敗"
+                result &&
+                result.message
+                    ? result.message
+                    : "儲存失敗"
             );
 
         }
@@ -2157,14 +2291,22 @@ async function clockOut() {
             await response.json();
 
 
+        console.log(
+            "📥 Clock Out 回傳：",
+            result
+        );
+
+
         if (
-            result.status !==
-            "success"
+            !result ||
+            result.success !== true
         ) {
 
             throw new Error(
-                result.message ||
-                "打卡失敗"
+                result &&
+                result.message
+                    ? result.message
+                    : "打卡失敗"
             );
 
         }
@@ -2388,8 +2530,7 @@ async function fetchFeedback() {
         const targetName =
             String(
                 currentStudent.name
-            )
-            .trim();
+            ).trim();
 
 
         const records =
@@ -2402,16 +2543,14 @@ async function fetchFeedback() {
                             String(
                                 record.studentName ||
                                 ""
-                            )
-                            .trim();
+                            ).trim();
 
 
                         const date =
                             String(
                                 record.date ||
                                 ""
-                            )
-                            .trim();
+                            ).trim();
 
 
                         const feedback =
