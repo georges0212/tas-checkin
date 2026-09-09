@@ -1476,11 +1476,6 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
         // ====================================
         // ⭐ 讀取 Google 回傳
         // ====================================
-
-        const result =
-            await response.json();
-
-
         const result =
     await response.json();
 
