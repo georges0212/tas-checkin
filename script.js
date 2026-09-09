@@ -1481,10 +1481,26 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
             await response.json();
 
 
-        console.log(
-            "Google Apps Script 回傳：",
-            result
-        );
+        const result =
+    await response.json();
+
+console.log(
+    "Google Apps Script 回傳：",
+    JSON.stringify(result, null, 2)
+);
+
+if (
+    result.status !==
+    "success"
+) {
+
+    throw new Error(
+        result.message ||
+        "Google Apps Script 儲存失敗"
+    );
+
+}
+
 
 
         if (
