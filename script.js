@@ -1655,6 +1655,18 @@ async function clockIn() {
 
         };
 
+        console.log("================================");
+console.log("📷 PHOTO TEST");
+console.log("學生：", currentStudent.name);
+console.log("工作場所：", selectedWorkplace);
+console.log("照片是否存在：", !!selectedWorkPhoto);
+console.log("原始照片大小：", selectedWorkPhoto ? selectedWorkPhoto.size : 0);
+console.log("Base64 長度：", photoBase64 ? photoBase64.length : 0);
+console.log("MIME Type：", "image/jpeg");
+console.log("================================");
+
+
+
 
         console.log(
             "準備送出照片"
