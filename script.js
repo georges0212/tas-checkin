@@ -1,5 +1,6 @@
 // ========================================
 // TAS 打卡系統
+// VS Code / JavaScript 完整版
 // ========================================
 
 
@@ -129,7 +130,18 @@ let selectedWorkplace = "";
 
 
 // ========================================
-// 輔助工具函式
+// 照片設定
+// ========================================
+
+// 照片最大寬度
+const PHOTO_MAX_WIDTH = 1280;
+
+// JPEG 品質
+const PHOTO_QUALITY = 0.75;
+
+
+// ========================================
+// HTML 安全處理
 // ========================================
 
 function escapeHTML(str) {
@@ -147,7 +159,7 @@ function escapeHTML(str) {
 
 
 // ========================================
-// ⭐ 清除教師評語多餘空白
+// 清除教師評語多餘空白
 // ========================================
 
 function cleanFeedbackText(text) {
@@ -156,28 +168,20 @@ function cleanFeedbackText(text) {
         return "";
     }
 
-
     return String(text)
 
-        // 把 Windows 換行統一
         .replace(/\r\n/g, "\n")
 
-        // 把單獨的 \r 統一
         .replace(/\r/g, "\n")
 
-        // 清除每一行最前面的空白
         .replace(/^[ \t]+/gm, "")
 
-        // 清除每一行最後面的空白
         .replace(/[ \t]+$/gm, "")
 
-        // 最前面多餘空白行刪掉
         .replace(/^\n+/, "")
 
-        // 最後面多餘空白行刪掉
         .replace(/\n+$/, "")
 
-        // 避免連續太多空白行
         .replace(/\n{3,}/g, "\n\n")
 
         .trim();
@@ -194,18 +198,15 @@ function formatDate(date) {
     const y =
         date.getFullYear();
 
-
     const m =
         String(
             date.getMonth() + 1
         ).padStart(2, "0");
 
-
     const d =
         String(
             date.getDate()
         ).padStart(2, "0");
-
 
     return `${y}-${m}-${d}`;
 
@@ -223,18 +224,15 @@ function formatTime(date) {
             date.getHours()
         ).padStart(2, "0");
 
-
     const m =
         String(
             date.getMinutes()
         ).padStart(2, "0");
 
-
     const s =
         String(
             date.getSeconds()
         ).padStart(2, "0");
-
 
     return `${h}:${m}:${s}`;
 
@@ -242,7 +240,7 @@ function formatTime(date) {
 
 
 // ========================================
-// ⭐ 教師評語日期解析
+// 教師評語日期解析
 // ========================================
 
 function parseFeedbackDate(dateValue) {
@@ -252,22 +250,12 @@ function parseFeedbackDate(dateValue) {
         dateValue === undefined ||
         dateValue === ""
     ) {
-
         return 0;
-
     }
-
 
     let value =
         String(dateValue)
             .trim();
-
-
-    // ------------------------------------
-    // Google Sheet 常見格式
-    // 2026/09/08
-    // 2026-09-08
-    // ------------------------------------
 
     value =
         value.replace(
@@ -275,43 +263,30 @@ function parseFeedbackDate(dateValue) {
             "-"
         );
 
-
-    // ------------------------------------
-    // 如果是
-    // 2026-09-08 10:30:00
-    // ------------------------------------
-
     const match =
         value.match(
             /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
         );
-
 
     if (match) {
 
         const year =
             Number(match[1]);
 
-
         const month =
             Number(match[2]);
-
 
         const day =
             Number(match[3]);
 
-
         const hour =
             Number(match[4] || 0);
-
 
         const minute =
             Number(match[5] || 0);
 
-
         const second =
             Number(match[6] || 0);
-
 
         return new Date(
             year,
@@ -324,30 +299,16 @@ function parseFeedbackDate(dateValue) {
 
     }
 
-
-    // ------------------------------------
-    // 嘗試一般日期格式
-    // ------------------------------------
-
     const parsed =
         new Date(value);
-
 
     if (
         !isNaN(
             parsed.getTime()
         )
     ) {
-
         return parsed.getTime();
-
     }
-
-
-    // ------------------------------------
-    // 無法解析
-    // 放到最後面
-    // ------------------------------------
 
     return 0;
 
@@ -355,7 +316,339 @@ function parseFeedbackDate(dateValue) {
 
 
 // ========================================
-// 首頁
+// 📷 將照片縮小
+//
+// 不管手機原本是 3000px、4000px、
+// 甚至更大的照片，都會先縮小。
+// 最後傳送 JPEG。
+// ========================================
+
+function compressImage(file) {
+
+    return new Promise(
+        function(resolve, reject) {
+
+            if (!file) {
+
+                reject(
+                    new Error(
+                        "沒有選擇照片"
+                    )
+                );
+
+                return;
+
+            }
+
+
+            // -------------------------------
+            // 確認是不是圖片
+            // -------------------------------
+
+            if (
+                !file.type ||
+                !file.type.startsWith("image/")
+            ) {
+
+                reject(
+                    new Error(
+                        "請選擇圖片檔案"
+                    )
+                );
+
+                return;
+
+            }
+
+
+            const reader =
+                new FileReader();
+
+
+            reader.onload =
+                function(event) {
+
+                    const img =
+                        new Image();
+
+
+                    img.onload =
+                        function() {
+
+                            let width =
+                                img.width;
+
+
+                            let height =
+                                img.height;
+
+
+                            // -----------------------
+                            // 計算縮小比例
+                            // -----------------------
+
+                            if (
+                                width >
+                                PHOTO_MAX_WIDTH
+                            ) {
+
+                                const ratio =
+                                    PHOTO_MAX_WIDTH /
+                                    width;
+
+
+                                width =
+                                    PHOTO_MAX_WIDTH;
+
+
+                                height =
+                                    Math.round(
+                                        height *
+                                        ratio
+                                    );
+
+                            }
+
+
+                            // -----------------------
+                            // 建立 Canvas
+                            // -----------------------
+
+                            const canvas =
+                                document.createElement(
+                                    "canvas"
+                                );
+
+
+                            canvas.width =
+                                width;
+
+
+                            canvas.height =
+                                height;
+
+
+                            const ctx =
+                                canvas.getContext(
+                                    "2d"
+                                );
+
+
+                            // -----------------------
+                            // 白色背景
+                            //
+                            // 避免某些透明 PNG
+                            // 轉 JPEG 後出問題
+                            // -----------------------
+
+                            ctx.fillStyle =
+                                "#ffffff";
+
+
+                            ctx.fillRect(
+                                0,
+                                0,
+                                width,
+                                height
+                            );
+
+
+                            // -----------------------
+                            // 畫入照片
+                            // -----------------------
+
+                            ctx.drawImage(
+                                img,
+                                0,
+                                0,
+                                width,
+                                height
+                            );
+
+
+                            // -----------------------
+                            // Canvas → JPEG Blob
+                            // -----------------------
+
+                            canvas.toBlob(
+                                function(blob) {
+
+                                    if (!blob) {
+
+                                        reject(
+                                            new Error(
+                                                "照片壓縮失敗"
+                                            )
+                                        );
+
+                                        return;
+
+                                    }
+
+
+                                    resolve(
+                                        blob
+                                    );
+
+                                },
+                                "image/jpeg",
+                                PHOTO_QUALITY
+                            );
+
+                        };
+
+
+                    img.onerror =
+                        function() {
+
+                            reject(
+                                new Error(
+                                    "無法讀取照片"
+                                )
+                            );
+
+                        };
+
+
+                    img.src =
+                        event.target.result;
+
+                };
+
+
+            reader.onerror =
+                function() {
+
+                    reject(
+                        new Error(
+                            "照片讀取失敗"
+                        )
+                    );
+
+                };
+
+
+            reader.readAsDataURL(file);
+
+        }
+    );
+
+}
+
+
+// ========================================
+// 📷 Blob → Base64
+// ========================================
+
+function blobToBase64(blob) {
+
+    return new Promise(
+        function(resolve, reject) {
+
+            const reader =
+                new FileReader();
+
+
+            reader.onload =
+                function() {
+
+                    const result =
+                        reader.result;
+
+
+                    // ---------------------------
+                    // result 會是：
+                    //
+                    // data:image/jpeg;base64,xxxx
+                    //
+                    // 我們保留完整 Data URL。
+                    // Google Apps Script 端
+                    // 會自動處理。
+                    // ---------------------------
+
+                    resolve(
+                        result
+                    );
+
+                };
+
+
+            reader.onerror =
+                function() {
+
+                    reject(
+                        new Error(
+                            "照片轉換 Base64 失敗"
+                        )
+                    );
+
+                };
+
+
+            reader.readAsDataURL(
+                blob
+            );
+
+        }
+    );
+
+}
+
+
+// ========================================
+// 📷 取得照片
+// ========================================
+
+async function getPhotoBase64(file) {
+
+    if (!file) {
+
+        throw new Error(
+            "請先選擇工作照片"
+        );
+
+    }
+
+
+    const compressedBlob =
+        await compressImage(
+            file
+        );
+
+
+    console.log(
+        "原始照片大小：",
+        file.size,
+        "bytes"
+    );
+
+
+    console.log(
+        "壓縮後照片大小：",
+        compressedBlob.size,
+        "bytes"
+    );
+
+
+    const base64 =
+        await blobToBase64(
+            compressedBlob
+        );
+
+
+    console.log(
+        "Base64 長度：",
+        base64.length
+    );
+
+
+    return base64;
+
+}
+
+
+// ========================================
+// 🏠 首頁
 // ========================================
 
 function showHome() {
@@ -377,21 +670,17 @@ function showHome() {
             TAS 打卡系統
         </h1>
 
-
         <h2>
             Welcome! 歡迎使用！
         </h2>
-
 
         <p>
             Please select your name！
         </p>
 
-
         <p>
             選擇你的名字！
         </p>
-
 
         <div
             class="student-grid"
@@ -408,7 +697,7 @@ function showHome() {
 
 
     students.forEach(
-        (student, index) => {
+        function(student, index) {
 
             const button =
                 document.createElement(
@@ -422,7 +711,7 @@ function showHome() {
 
             button.addEventListener(
                 "click",
-                () => {
+                function() {
 
                     showBirthdayVerification(
                         index
@@ -468,16 +757,13 @@ function showBirthdayVerification(index) {
             ! 👋
         </h1>
 
-
         <h2>
             Select your birthday
         </h2>
 
-
         <p>
             請選擇你的生日
         </p>
-
 
         <div>
 
@@ -487,7 +773,6 @@ function showBirthdayVerification(index) {
 
             </select>
 
-
             <select id="day">
 
                 ${createDayOptions()}
@@ -496,26 +781,17 @@ function showBirthdayVerification(index) {
 
         </div>
 
-
         <br>
 
-
         <button id="verifyButton">
-
             Verify 驗證
-
         </button>
-
 
         <br><br>
 
-
         <button id="backButton">
-
             ⬅ Back 返回
-
         </button>
-
 
         <div
             id="error"
@@ -563,11 +839,9 @@ function createMonthOptions() {
     ) {
 
         html += `
-
             <option value="${i}">
                 ${i} 月
             </option>
-
         `;
 
     }
@@ -594,11 +868,9 @@ function createDayOptions() {
     ) {
 
         html += `
-
             <option value="${i}">
                 ${i} 日
             </option>
-
         `;
 
     }
@@ -687,7 +959,6 @@ function showMainMenu() {
             Hello！哈囉！
         </h1>
 
-
         <h2>
             ${escapeHTML(
                 currentStudent.name
@@ -695,16 +966,13 @@ function showMainMenu() {
             👋
         </h2>
 
-
         <p>
             What would you like to do?
         </p>
 
-
         <p>
             你要做什麼？
         </p>
-
 
         <div class="menu">
 
@@ -712,21 +980,17 @@ function showMainMenu() {
                 🟢 Start Work 開始工作
             </button>
 
-
             <button id="lunchButton">
                 🍱 Lunch / Dinner 午餐／晚餐
             </button>
-
 
             <button id="finishWorkButton">
                 🔴 Finish Work 打卡下班
             </button>
 
-
             <button id="feedbackButton">
                 💬 Teacher Feedback 教師評語
             </button>
-
 
             <button id="logoutButton">
                 ⬅ 回到學生選擇
@@ -788,18 +1052,21 @@ function showMainMenu() {
 
 }
 
+
 // ========================================
-// Start Work
+// 🟢 Start Work
 // ========================================
 
 function showStartWork() {
 
     selectedWorkplace = "";
 
+
     const app =
         document.getElementById(
             "app"
         );
+
 
     app.innerHTML = `
 
@@ -814,7 +1081,6 @@ function showStartWork() {
         <p>
             選擇你的職場
         </p>
-
 
         <div class="workplace-grid">
 
@@ -837,28 +1103,20 @@ function showStartWork() {
         </div>
 
 
-        <p
-            id="selectedWorkplace"
-            style="
-                font-weight:bold;
-                font-size:18px;
-                margin-top:20px;
-            "
-        ></p>
+        <p id="selectedWorkplace"></p>
 
 
-        <!-- ================================= -->
-        <!-- 📷 照片上傳 -->
-        <!-- ================================= -->
+        <!-- =================================
+             📷 工作照片
+        ================================== -->
 
         <div
-            id="photoSection"
             style="
                 margin-top:25px;
                 padding:20px;
                 background:#f8fafc;
-                border-radius:18px;
                 border:1px solid #e2e8f0;
+                border-radius:16px;
             "
         >
 
@@ -867,26 +1125,37 @@ function showStartWork() {
             </h3>
 
             <p>
-                請拍攝或選擇今天的工作照片
+                請選擇一張今天工作的照片
             </p>
 
             <input
-                id="workPhotoInput"
+                id="workPhoto"
                 type="file"
                 accept="image/*"
-                capture="environment"
-                style="
-                    width:100%;
-                    max-width:400px;
-                "
             >
 
-            <div
+            <p
+                id="photoSelectedMessage"
+                style="
+                    color:#2563eb;
+                    font-weight:bold;
+                    margin-top:10px;
+                "
+            ></p>
+
+            <img
                 id="photoPreview"
                 style="
+                    display:none;
+                    max-width:100%;
+                    max-height:300px;
                     margin-top:15px;
+                    border-radius:12px;
+                    box-shadow:
+                        0 3px 10px
+                        rgba(0,0,0,0.15);
                 "
-            ></div>
+            >
 
         </div>
 
@@ -894,15 +1163,9 @@ function showStartWork() {
         <br>
 
 
-        <!-- ================================= -->
-        <!-- Clock In -->
-        <!-- ================================= -->
-
         <button
             id="clockInButton"
-            style="
-                display:none;
-            "
+            style="display:none;"
         >
             🟢 Clock In 打卡上班
         </button>
@@ -916,19 +1179,14 @@ function showStartWork() {
         </button>
 
 
-        <div
-            id="clockInMessage"
-            style="
-                margin-top:20px;
-            "
-        ></div>
+        <div id="clockInMessage"></div>
 
     `;
 
 
-    // ========================================
-    // 工作場所按鈕
-    // ========================================
+    // ====================================
+    // 工作場所
+    // ====================================
 
     document
         .getElementById(
@@ -936,7 +1194,13 @@ function showStartWork() {
         )
         .addEventListener(
             "click",
-            () => chooseWorkplace("門市")
+            function() {
+
+                chooseWorkplace(
+                    "門市"
+                );
+
+            }
         );
 
 
@@ -946,7 +1210,13 @@ function showStartWork() {
         )
         .addEventListener(
             "click",
-            () => chooseWorkplace("餐飲")
+            function() {
+
+                chooseWorkplace(
+                    "餐飲"
+                );
+
+            }
         );
 
 
@@ -956,7 +1226,13 @@ function showStartWork() {
         )
         .addEventListener(
             "click",
-            () => chooseWorkplace("醫院")
+            function() {
+
+                chooseWorkplace(
+                    "醫院"
+                );
+
+            }
         );
 
 
@@ -966,27 +1242,19 @@ function showStartWork() {
         )
         .addEventListener(
             "click",
-            () => chooseWorkplace("清潔")
+            function() {
+
+                chooseWorkplace(
+                    "清潔"
+                );
+
+            }
         );
 
 
-    // ========================================
-    // 照片選擇
-    // ========================================
-
-    document
-        .getElementById(
-            "workPhotoInput"
-        )
-        .addEventListener(
-            "change",
-            handleWorkPhoto
-        );
-
-
-    // ========================================
+    // ====================================
     // Clock In
-    // ========================================
+    // ====================================
 
     document
         .getElementById(
@@ -998,9 +1266,9 @@ function showStartWork() {
         );
 
 
-    // ========================================
+    // ====================================
     // 返回
-    // ========================================
+    // ====================================
 
     document
         .getElementById(
@@ -1011,6 +1279,20 @@ function showStartWork() {
             showMainMenu
         );
 
+
+    // ====================================
+    // 📷 照片選擇
+    // ====================================
+
+    document
+        .getElementById(
+            "workPhoto"
+        )
+        .addEventListener(
+            "change",
+            previewSelectedPhoto
+        );
+
 }
 
 
@@ -1018,27 +1300,19 @@ function showStartWork() {
 // 選擇工作場所
 // ========================================
 
-function chooseWorkplace(
-    workplace
-) {
+function chooseWorkplace(workplace) {
 
     selectedWorkplace =
         workplace;
 
 
-    const selectedElement =
-        document.getElementById(
+    document
+        .getElementById(
             "selectedWorkplace"
-        );
-
-
-    if (selectedElement) {
-
-        selectedElement.textContent =
+        )
+        .textContent =
             "Selected: " +
             workplace;
-
-    }
 
 
     updateClockInButton();
@@ -1047,23 +1321,19 @@ function chooseWorkplace(
 
 
 // ========================================
-// 📷 儲存照片資料
+// 📷 預覽照片
 // ========================================
 
-let selectedWorkPhoto = null;
-
-
-// ========================================
-// 📷 處理工作照片
-// ========================================
-
-function handleWorkPhoto(
-    event
-) {
+function previewSelectedPhoto(event) {
 
     const file =
-        event.target.files &&
         event.target.files[0];
+
+
+    const message =
+        document.getElementById(
+            "photoSelectedMessage"
+        );
 
 
     const preview =
@@ -1074,15 +1344,16 @@ function handleWorkPhoto(
 
     if (!file) {
 
-        selectedWorkPhoto = null;
+        message.textContent =
+            "";
 
-        if (preview) {
 
-            preview.innerHTML = "";
+        preview.style.display =
+            "none";
 
-        }
 
         updateClockInButton();
+
 
         return;
 
@@ -1090,25 +1361,27 @@ function handleWorkPhoto(
 
 
     // ====================================
-    // 確認是不是圖片
+    // 確認圖片
     // ====================================
 
     if (
-        !file.type ||
-        !file.type.startsWith(
-            "image/"
-        )
+        !file.type.startsWith("image/")
     ) {
 
-        alert(
-            "請選擇照片檔案"
-        );
+        message.textContent =
+            "❌ 請選擇圖片檔案";
 
-        event.target.value = "";
 
-        selectedWorkPhoto = null;
+        event.target.value =
+            "";
+
+
+        preview.style.display =
+            "none";
+
 
         updateClockInButton();
+
 
         return;
 
@@ -1116,342 +1389,53 @@ function handleWorkPhoto(
 
 
     // ====================================
-    // 顯示原始照片預覽
+    // 顯示檔案名稱
     // ====================================
 
-    const reader =
-        new FileReader();
+    message.textContent =
+        "✅ 已選擇：" +
+        file.name;
 
 
-    reader.onload =
-        function(e) {
+    // ====================================
+    // 預覽
+    // ====================================
 
-            if (!preview) {
-                return;
-            }
+    const objectUrl =
+        URL.createObjectURL(
+            file
+        );
 
 
-            preview.innerHTML = `
+    preview.src =
+        objectUrl;
 
-                <div
-                    style="
-                        text-align:center;
-                    "
-                >
 
-                    <img
-                        src="${e.target.result}"
-                        alt="工作照片預覽"
-                        style="
-                            max-width:100%;
-                            max-height:300px;
-                            border-radius:14px;
-                            object-fit:contain;
-                            box-shadow:
-                                0 4px 15px
-                                rgba(0,0,0,0.15);
-                        "
-                    >
+    preview.style.display =
+        "block";
 
-                    <p
-                        style="
-                            color:#475569;
-                            font-size:14px;
-                            margin-top:10px;
-                        "
-                    >
-                        📷 ${escapeHTML(file.name)}
-                    </p>
 
-                    <p
-                        style="
-                            color:#64748b;
-                            font-size:13px;
-                        "
-                    >
-                        原始大小：
-                        ${formatFileSize(file.size)}
-                    </p>
+    preview.onload =
+        function() {
 
-                </div>
-
-            `;
+            URL.revokeObjectURL(
+                objectUrl
+            );
 
         };
 
 
-    reader.readAsDataURL(file);
-
-
-    // ====================================
-    // ⭐ 照片壓縮
-    // ====================================
-
-    compressWorkPhoto(
-        file
-    )
-    .then(
-        function(compressedFile) {
-
-            selectedWorkPhoto =
-                compressedFile;
-
-
-            console.log(
-                "📷 原始照片：",
-                file.size,
-                "bytes"
-            );
-
-
-            console.log(
-                "📷 壓縮後照片：",
-                compressedFile.size,
-                "bytes"
-            );
-
-
-            updateClockInButton();
-
-        }
-    )
-    .catch(
-        function(error) {
-
-            console.error(
-                "照片處理失敗：",
-                error
-            );
-
-
-            selectedWorkPhoto = null;
-
-
-            alert(
-                "照片處理失敗，請重新選擇照片"
-            );
-
-
-            updateClockInButton();
-
-        }
-    );
+    updateClockInButton();
 
 }
 
 
 // ========================================
-// 📷 壓縮照片
-// ========================================
-
-function compressWorkPhoto(
-    file
-) {
-
-    return new Promise(
-        function(resolve, reject) {
-
-            const reader =
-                new FileReader();
-
-
-            reader.onload =
-                function(event) {
-
-                    const img =
-                        new Image();
-
-
-                    img.onload =
-                        function() {
-
-                            // =================================
-                            // 最大寬高
-                            // =================================
-
-                            const MAX_WIDTH =
-                                1280;
-
-                            const MAX_HEIGHT =
-                                1280;
-
-
-                            let width =
-                                img.width;
-
-
-                            let height =
-                                img.height;
-
-
-                            // =================================
-                            // 等比例縮小
-                            // =================================
-
-                            if (
-                                width >
-                                MAX_WIDTH
-                            ) {
-
-                                height =
-                                    height *
-                                    (
-                                        MAX_WIDTH /
-                                        width
-                                    );
-
-                                width =
-                                    MAX_WIDTH;
-
-                            }
-
-
-                            if (
-                                height >
-                                MAX_HEIGHT
-                            ) {
-
-                                width =
-                                    width *
-                                    (
-                                        MAX_HEIGHT /
-                                        height
-                                    );
-
-                                height =
-                                    MAX_HEIGHT;
-
-                            }
-
-
-                            // =================================
-                            // Canvas
-                            // =================================
-
-                            const canvas =
-                                document.createElement(
-                                    "canvas"
-                                );
-
-
-                            canvas.width =
-                                Math.round(
-                                    width
-                                );
-
-
-                            canvas.height =
-                                Math.round(
-                                    height
-                                );
-
-
-                            const ctx =
-                                canvas.getContext(
-                                    "2d"
-                                );
-
-
-                            ctx.drawImage(
-                                img,
-                                0,
-                                0,
-                                canvas.width,
-                                canvas.height
-                            );
-
-
-                            // =================================
-                            // JPEG
-                            // =================================
-
-                            canvas.toBlob(
-                                function(blob) {
-
-                                    if (!blob) {
-
-                                        reject(
-                                            new Error(
-                                                "照片壓縮失敗"
-                                            )
-                                        );
-
-                                        return;
-
-                                    }
-
-
-                                    // =================================
-                                    // 建立新的 File
-                                    // =================================
-
-                                    const compressedFile =
-                                        new File(
-                                            [
-                                                blob
-                                            ],
-                                            "work-photo.jpg",
-                                            {
-                                                type:
-                                                    "image/jpeg"
-                                            }
-                                        );
-
-
-                                    resolve(
-                                        compressedFile
-                                    );
-
-                                },
-                                "image/jpeg",
-                                0.75
-                            );
-
-                        };
-
-
-                    img.onerror =
-                        function() {
-
-                            reject(
-                                new Error(
-                                    "無法讀取照片"
-                                )
-                            );
-
-                        };
-
-
-                    img.src =
-                        event.target.result;
-
-                };
-
-
-            reader.onerror =
-                function() {
-
-                    reject(
-                        new Error(
-                            "無法讀取照片檔案"
-                        )
-                    );
-
-                };
-
-
-            reader.readAsDataURL(
-                file
-            );
-
-        }
-    );
-
-}
-
-
-// ========================================
-// 📷 更新 Clock In 按鈕
+// 🟢 更新 Clock In 按鈕狀態
+//
+// 必須：
+// 1. 選工作場所
+// 2. 選照片
 // ========================================
 
 function updateClockInButton() {
@@ -1467,21 +1451,25 @@ function updateClockInButton() {
     }
 
 
+    const photoInput =
+        document.getElementById(
+            "workPhoto"
+        );
+
+
+    const hasPhoto =
+        photoInput &&
+        photoInput.files &&
+        photoInput.files.length > 0;
+
+
     if (
         selectedWorkplace &&
-        selectedWorkPhoto
+        hasPhoto
     ) {
 
         button.style.display =
             "inline-block";
-
-
-        button.disabled =
-            false;
-
-
-        button.textContent =
-            "🟢 Clock In 打卡上班";
 
     }
 
@@ -1496,54 +1484,14 @@ function updateClockInButton() {
 
 
 // ========================================
-// 📷 檔案大小格式
-// ========================================
-
-function formatFileSize(
-    bytes
-) {
-
-    if (
-        !bytes ||
-        bytes <= 0
-    ) {
-
-        return "0 KB";
-
-    }
-
-
-    const kb =
-        bytes / 1024;
-
-
-    if (kb < 1024) {
-
-        return (
-            kb.toFixed(1) +
-            " KB"
-        );
-
-    }
-
-
-    const mb =
-        kb / 1024;
-
-
-    return (
-        mb.toFixed(2) +
-        " MB"
-    );
-
-}
-
-
-// ========================================
-// Clock In
+// 🟢 Clock In
 // ========================================
 
 async function clockIn() {
+
+    // ====================================
+    // 學生
+    // ====================================
 
     if (!currentStudent) {
 
@@ -1556,6 +1504,10 @@ async function clockIn() {
     }
 
 
+    // ====================================
+    // 工作場所
+    // ====================================
+
     if (!selectedWorkplace) {
 
         alert(
@@ -1567,10 +1519,24 @@ async function clockIn() {
     }
 
 
-    if (!selectedWorkPhoto) {
+    // ====================================
+    // 照片
+    // ====================================
+
+    const photoInput =
+        document.getElementById(
+            "workPhoto"
+        );
+
+
+    if (
+        !photoInput ||
+        !photoInput.files ||
+        photoInput.files.length === 0
+    ) {
 
         alert(
-            "📷 請先拍攝或選擇工作照片"
+            "請先選擇工作照片"
         );
 
         return;
@@ -1578,9 +1544,27 @@ async function clockIn() {
     }
 
 
+    const originalPhoto =
+        photoInput.files[0];
+
+
+    // ====================================
+    // 現在時間
+    //
+    // 注意：
+    // 這個時間只用於 Sheet 的 Clock In。
+    //
+    // Google Drive 檔案日期則由
+    // Google Apps Script 自己抓。
+    // ====================================
+
     const now =
         new Date();
 
+
+    // ====================================
+    // UI
+    // ====================================
 
     const message =
         document.getElementById(
@@ -1608,6 +1592,10 @@ async function clockIn() {
 
             📷 正在處理照片...
 
+            <br><br>
+
+            請稍候，不要關閉頁面。
+
         </div>
 
     `;
@@ -1615,13 +1603,13 @@ async function clockIn() {
 
     try {
 
-        // ====================================
-        // 📷 File → Base64
-        // ====================================
+        // =================================
+        // 📷 壓縮照片
+        // =================================
 
         const photoBase64 =
-            await fileToBase64(
-                selectedWorkPhoto
+            await getPhotoBase64(
+                originalPhoto
             );
 
 
@@ -1631,7 +1619,7 @@ async function clockIn() {
 
 
         console.log(
-            "📷 PHOTO TEST"
+            "📷 照片準備完成"
         );
 
 
@@ -1642,20 +1630,8 @@ async function clockIn() {
 
 
         console.log(
-            "工作場所：",
-            selectedWorkplace
-        );
-
-
-        console.log(
-            "照片是否存在：",
-            !!selectedWorkPhoto
-        );
-
-
-        console.log(
-            "壓縮照片大小：",
-            selectedWorkPhoto.size
+            "原始檔案：",
+            originalPhoto.name
         );
 
 
@@ -1666,36 +1642,51 @@ async function clockIn() {
 
 
         console.log(
-            "MIME Type：",
-            "image/jpeg"
-        );
-
-
-        console.log(
             "================================"
         );
 
 
-        // ====================================
+        // =================================
         // Payload
-        // ====================================
+        // =================================
 
         const payload = {
+
+            // -----------------------------
+            // 學生
+            // -----------------------------
 
             studentName:
                 currentStudent.name,
 
+
+            // -----------------------------
+            // Clock In
+            // -----------------------------
+
             date:
                 formatDate(now),
+
 
             clockInTime:
                 formatTime(now),
 
+
+            // -----------------------------
+            // 工作場所
+            // -----------------------------
+
             workplace:
                 selectedWorkplace,
 
+
+            // -----------------------------
+            // 📷 照片
+            // -----------------------------
+
             photoBase64:
                 photoBase64,
+
 
             photoMimeType:
                 "image/jpeg"
@@ -1703,20 +1694,55 @@ async function clockIn() {
         };
 
 
+        console.log(
+            "📦 準備傳送資料"
+        );
+
+
+        console.log(
+            "學生：",
+            payload.studentName
+        );
+
+
+        console.log(
+            "工作場所：",
+            payload.workplace
+        );
+
+
+        console.log(
+            "照片 Base64 長度：",
+            payload.photoBase64.length
+        );
+
+
+        // =================================
+        // UI
+        // =================================
+
+        clockButton.textContent =
+            "⏳ 正在上傳照片...";
+
+
         message.innerHTML = `
 
             <div class="loading">
 
-                📤 正在上傳打卡資料與照片...
+                📤 正在上傳照片...
+
+                <br><br>
+
+                請稍候。
 
             </div>
 
         `;
 
 
-        // ====================================
-        // POST
-        // ====================================
+        // =================================
+        // POST Google Apps Script
+        // =================================
 
         const response =
             await fetch(
@@ -1742,6 +1768,12 @@ async function clockIn() {
             );
 
 
+        console.log(
+            "Google Apps Script HTTP Status：",
+            response.status
+        );
+
+
         if (!response.ok) {
 
             throw new Error(
@@ -1752,36 +1784,61 @@ async function clockIn() {
         }
 
 
-        // ====================================
-        // 讀取 Apps Script 回傳
-        // ====================================
+        // =================================
+        // 讀取回應
+        // =================================
 
-        const result =
-            await response.json();
+        const responseText =
+            await response.text();
 
 
         console.log(
-            "Google Apps Script 回傳：",
-            result
+            "Google Apps Script 回應：",
+            responseText
         );
 
 
-        if (
-            result.status !==
-            "success"
-        ) {
+        let result = null;
 
-            throw new Error(
-                result.message ||
-                "Google Apps Script 上傳失敗"
+
+        try {
+
+            result =
+                JSON.parse(
+                    responseText
+                );
+
+        }
+
+        catch (jsonError) {
+
+            console.warn(
+                "回應不是 JSON"
             );
 
         }
 
 
-        // ====================================
+        // =================================
+        // 如果 Apps Script 明確回報錯誤
+        // =================================
+
+        if (
+            result &&
+            result.status === "error"
+        ) {
+
+            throw new Error(
+                result.message ||
+                "Google Apps Script 發生錯誤"
+            );
+
+        }
+
+
+        // =================================
         // 成功
-        // ====================================
+        // =================================
 
         message.innerHTML = `
 
@@ -1826,7 +1883,7 @@ async function clockIn() {
 
 
                 <p>
-                    📷 工作照片已上傳
+                    📷 工作照片已送出
                 </p>
 
 
@@ -1857,8 +1914,8 @@ async function clockIn() {
                 showMainMenu
             );
 
-
     }
+
 
     catch (error) {
 
@@ -1891,6 +1948,11 @@ async function clockIn() {
                     )}
                 </p>
 
+
+                <p>
+                    請確認網路連線後再試一次。
+                </p>
+
             </div>
 
         `;
@@ -1901,105 +1963,7 @@ async function clockIn() {
 
 
 // ========================================
-// 📷 File → Base64
-// ========================================
-
-function fileToBase64(
-    file
-) {
-
-    return new Promise(
-        function(resolve, reject) {
-
-            const reader =
-                new FileReader();
-
-
-            reader.onload =
-                function() {
-
-                    const result =
-                        String(
-                            reader.result ||
-                            ""
-                        );
-
-
-                    // =================================
-                    // data:image/jpeg;base64,XXXX
-                    //
-                    // 我們只要逗號後面的 Base64
-                    // =================================
-
-                    const commaIndex =
-                        result.indexOf(",");
-
-
-                    if (
-                        commaIndex ===
-                        -1
-                    ) {
-
-                        reject(
-                            new Error(
-                                "照片 Base64 格式錯誤"
-                            )
-                        );
-
-                        return;
-
-                    }
-
-
-                    const base64 =
-                        result.substring(
-                            commaIndex + 1
-                        );
-
-
-                    if (!base64) {
-
-                        reject(
-                            new Error(
-                                "照片 Base64 是空的"
-                            )
-                        );
-
-                        return;
-
-                    }
-
-
-                    resolve(
-                        base64
-                    );
-
-                };
-
-
-            reader.onerror =
-                function() {
-
-                    reject(
-                        new Error(
-                            "照片轉換失敗"
-                        )
-                    );
-
-                };
-
-
-            reader.readAsDataURL(
-                file
-            );
-
-        }
-    );
-
-}
-
-// ========================================
-// Lunch / Dinner
+// 🍱 Lunch / Dinner
 // ========================================
 
 function showLunch() {
@@ -2016,21 +1980,17 @@ function showLunch() {
             Lunch / Dinner 🍱
         </h1>
 
-
         <h2>
             午餐／晚餐
         </h2>
-
 
         <p>
             What did you eat?
         </p>
 
-
         <p>
             你今天吃什麼？
         </p>
-
 
         <input
             id="food"
@@ -2038,19 +1998,15 @@ function showLunch() {
             placeholder="Food 食物"
         >
 
-
         <br><br>
-
 
         <p>
             How much did you spend?
         </p>
 
-
         <p>
             你花了多少錢？
         </p>
-
 
         <input
             id="cost"
@@ -2060,9 +2016,7 @@ function showLunch() {
             placeholder="Cost 價錢"
         >
 
-
         <br><br>
-
 
         <button
             id="saveLunchButton"
@@ -2070,16 +2024,13 @@ function showLunch() {
             💾 Save 儲存
         </button>
 
-
         <br><br>
-
 
         <button
             id="backLunchButton"
         >
             ⬅ 返回主選單
         </button>
-
 
         <div id="lunchMessage"></div>
 
@@ -2228,7 +2179,8 @@ async function saveLunch() {
                 SCRIPT_URL,
                 {
 
-                    method: "POST",
+                    method:
+                        "POST",
 
                     headers: {
 
@@ -2264,11 +2216,9 @@ async function saveLunch() {
                     ✅ Saved!
                 </h2>
 
-
                 <p>
                     午餐／晚餐紀錄成功！
                 </p>
-
 
                 <p>
                     Student:
@@ -2277,14 +2227,12 @@ async function saveLunch() {
                     )}
                 </p>
 
-
                 <p>
                     Food:
                     ${escapeHTML(
                         food
                     )}
                 </p>
-
 
                 <p>
                     Cost:
@@ -2293,15 +2241,12 @@ async function saveLunch() {
                     )}
                 </p>
 
-
                 <p>
                     Time:
                     ${formatTime(now)}
                 </p>
 
-
                 <br>
-
 
                 <button
                     id="backAfterLunch"
@@ -2353,7 +2298,6 @@ async function saveLunch() {
                     ❌ 儲存失敗
                 </h2>
 
-
                 <p>
                     ${escapeHTML(
                         error.message
@@ -2370,7 +2314,7 @@ async function saveLunch() {
 
 
 // ========================================
-// Finish Work
+// 🔴 Finish Work
 // ========================================
 
 function showFinishWork() {
@@ -2387,24 +2331,19 @@ function showFinishWork() {
             Finish Work 🔴
         </h1>
 
-
         <h2>
             打卡下班
         </h2>
-
 
         <p>
             Ready to finish work?
         </p>
 
-
         <p>
             準備下班了嗎？
         </p>
 
-
         <br>
-
 
         <button
             id="clockOutButton"
@@ -2412,16 +2351,13 @@ function showFinishWork() {
             🔴 Clock Out 打卡下班
         </button>
 
-
         <br><br>
-
 
         <button
             id="backFinishButton"
         >
             ⬅ 返回主選單
         </button>
-
 
         <div id="clockOutMessage"></div>
 
@@ -2523,7 +2459,8 @@ async function clockOut() {
                 SCRIPT_URL,
                 {
 
-                    method: "POST",
+                    method:
+                        "POST",
 
                     headers: {
 
@@ -2559,11 +2496,9 @@ async function clockOut() {
                     ✅ Clock-out completed!
                 </h2>
 
-
                 <p>
                     下班打卡成功！
                 </p>
-
 
                 <p>
                     Student:
@@ -2572,21 +2507,17 @@ async function clockOut() {
                     )}
                 </p>
 
-
                 <p>
                     Date:
                     ${formatDate(now)}
                 </p>
-
 
                 <p>
                     Time:
                     ${formatTime(now)}
                 </p>
 
-
                 <br>
-
 
                 <button
                     id="backAfterClockOut"
@@ -2638,7 +2569,6 @@ async function clockOut() {
                     ❌ 打卡失敗
                 </h2>
 
-
                 <p>
                     ${escapeHTML(
                         error.message
@@ -2672,11 +2602,9 @@ function showFeedback() {
             Teacher Feedback 💬
         </h1>
 
-
         <h2>
             教師評語
         </h2>
-
 
         <div
             id="feedbackMessage"
@@ -2685,9 +2613,7 @@ function showFeedback() {
             ⏳ 讀取所有評語中...
         </div>
 
-
         <br>
-
 
         <button
             id="backFeedbackButton"
@@ -2727,10 +2653,6 @@ async function fetchFeedback() {
 
     try {
 
-        // ====================================
-        // 防止快取
-        // ====================================
-
         const url =
             FEEDBACK_URL +
             "?nocache=" +
@@ -2767,10 +2689,6 @@ async function fetchFeedback() {
         );
 
 
-        // ====================================
-        // 確認 API 回傳是不是陣列
-        // ====================================
-
         if (
             !Array.isArray(data)
         ) {
@@ -2781,10 +2699,6 @@ async function fetchFeedback() {
 
         }
 
-
-        // ====================================
-        // 確認目前登入學生
-        // ====================================
 
         if (!currentStudent) {
 
@@ -2801,16 +2715,6 @@ async function fetchFeedback() {
             )
             .trim();
 
-
-        console.log(
-            "目前學生：",
-            targetName
-        );
-
-
-        // ====================================
-        // 找出目前學生的所有評語
-        // ====================================
 
         const records =
             data
@@ -2833,8 +2737,6 @@ async function fetchFeedback() {
                             )
                             .trim();
 
-
-                        // ⭐ 清除評語前後及每行多餘空格
 
                         const feedback =
                             cleanFeedbackText(
@@ -2878,16 +2780,6 @@ async function fetchFeedback() {
                 );
 
 
-        console.log(
-            "找到全部評語：",
-            records
-        );
-
-
-        // ====================================
-        // 沒有評語
-        // ====================================
-
         if (
             records.length === 0
         ) {
@@ -2917,11 +2809,9 @@ async function fetchFeedback() {
                         💬
                     </div>
 
-
                     <h2>
                         目前尚無老師評語
                     </h2>
-
 
                     <p>
                         老師還沒有留下評語喔！
@@ -2937,11 +2827,9 @@ async function fetchFeedback() {
         }
 
 
-        // ====================================
-        // ⭐⭐⭐ 最重要的排序 ⭐⭐⭐
-        //
-        // 最新日期 → 最舊日期
-        // ====================================
+        // =================================
+        // 最新 → 最舊
+        // =================================
 
         records.sort(
             function(a, b) {
@@ -2964,15 +2852,9 @@ async function fetchFeedback() {
         );
 
 
-        console.log(
-            "⭐ 排序後評語：",
-            records
-        );
-
-
-        // ====================================
-        // ⭐ 依日期分組
-        // ====================================
+        // =================================
+        // 日期分組
+        // =================================
 
         const groupedRecords = {};
 
@@ -3015,10 +2897,9 @@ async function fetchFeedback() {
         );
 
 
-        // ====================================
-        // ⭐ 日期排序
-        // 最新 → 最舊
-        // ====================================
+        // =================================
+        // 日期排序
+        // =================================
 
         const sortedDates =
             Object.keys(
@@ -3037,9 +2918,9 @@ async function fetchFeedback() {
             );
 
 
-        // ====================================
-        // 建立評語卡片
-        // ====================================
+        // =================================
+        // 建立 HTML
+        // =================================
 
         let feedbackHTML =
             "";
@@ -3053,10 +2934,6 @@ async function fetchFeedback() {
                         date
                     ];
 
-
-                // ====================================
-                // 日期標題
-                // ====================================
 
                 feedbackHTML += `
 
@@ -3096,10 +2973,6 @@ async function fetchFeedback() {
                 `;
 
 
-                // ====================================
-                // 該日期的所有評語
-                // ====================================
-
                 dateRecords.forEach(
                     function(record, index) {
 
@@ -3134,14 +3007,6 @@ async function fetchFeedback() {
                                     💬 第 ${index + 1} 則評語
                                 </div>
 
-
-                                <!--
-                                    ⭐ 評語文字
-                                    不使用 pre-wrap，
-                                    避免 Google Sheet
-                                    裡面的縮排空格被帶出來
-                                -->
-
                                 <div
                                     style="
                                         font-size:16px;
@@ -3165,10 +3030,6 @@ async function fetchFeedback() {
                 );
 
 
-                // ====================================
-                // 關閉日期區塊
-                // ====================================
-
                 feedbackHTML += `
 
                     </div>
@@ -3178,10 +3039,6 @@ async function fetchFeedback() {
             }
         );
 
-
-        // ====================================
-        // ⭐ 寫入頁面
-        // ====================================
 
         message.className = "";
 
@@ -3221,7 +3078,6 @@ async function fetchFeedback() {
                 ❌ 讀取評語失敗
             </h2>
 
-
             <p>
                 ${escapeHTML(
                     error.message
@@ -3236,7 +3092,7 @@ async function fetchFeedback() {
 
 
 // ========================================
-// 初始化頁面
+// 初始化
 // ========================================
 
 document.addEventListener(
