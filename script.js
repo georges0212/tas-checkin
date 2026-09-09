@@ -1399,9 +1399,14 @@ async function clockIn() {
         // ====================================
 
         const photoBase64 =
-            await blobToBase64(
-                compressedBlob
-            );
+    await blobToBase64(
+        compressedBlob
+    );
+
+console.log("📷 原始照片大小：", selectedPhotoFile.size);
+console.log("📷 壓縮後照片大小：", compressedBlob.size);
+console.log("📷 Base64 長度：", photoBase64.length);
+console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
 
 
         // ====================================
