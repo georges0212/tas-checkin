@@ -1,11 +1,27 @@
+```javascript
 // ========================================
 // TAS 打卡系統
 // VS Code 完整版
+//
+// 前端只有一個 script.js
+//
+// 但是後端維持兩套 Google Apps Script：
+//
+// ① TAS GAS
+//    - Clock In
+//    - 工作照片
+//    - Lunch / Dinner
+//    - Clock Out
+//
+// ② Teacher Feedback GAS
+//    - 教師評語
+//
+// 兩套 GAS 完全獨立，不合併。
 // ========================================
 
 
 // ========================================
-// Google Apps Script
+// ① TAS 打卡 Google Apps Script
 // ========================================
 
 const SCRIPT_URL =
@@ -13,7 +29,7 @@ const SCRIPT_URL =
 
 
 // ========================================
-// Teacher Feedback Google Apps Script
+// ② Teacher Feedback Google Apps Script
 // ========================================
 
 const FEEDBACK_URL =
@@ -152,7 +168,7 @@ function escapeHTML(str) {
 
 
 // ========================================
-// 清除教師評語空白
+// 教師評語文字清理
 // ========================================
 
 function cleanFeedbackText(text) {
@@ -244,10 +260,12 @@ function parseFeedbackDate(dateValue) {
     value =
         value.replace(/\//g, "-");
 
+
     const match =
         value.match(
             /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
         );
+
 
     if (match) {
 
@@ -269,6 +287,7 @@ function parseFeedbackDate(dateValue) {
         const second =
             Number(match[6] || 0);
 
+
         return new Date(
             year,
             month - 1,
@@ -280,12 +299,15 @@ function parseFeedbackDate(dateValue) {
 
     }
 
+
     const parsed =
         new Date(value);
+
 
     if (!isNaN(parsed.getTime())) {
         return parsed.getTime();
     }
+
 
     return 0;
 
@@ -304,17 +326,20 @@ function compressImage(file) {
             const reader =
                 new FileReader();
 
+
             reader.onload =
                 function(event) {
 
                     const img =
                         new Image();
 
+
                     img.onload =
                         function() {
 
                             const maxWidth =
                                 1600;
+
 
                             let width =
                                 img.width;
@@ -384,6 +409,7 @@ function compressImage(file) {
 
                                     }
 
+
                                     resolve(blob);
 
                                 },
@@ -451,6 +477,7 @@ function blobToBase64(blob) {
                     const result =
                         reader.result;
 
+
                     if (!result) {
 
                         reject(
@@ -484,6 +511,7 @@ function blobToBase64(blob) {
                     const base64 =
                         parts[1];
 
+
                     resolve(base64);
 
                 };
@@ -505,6 +533,138 @@ function blobToBase64(blob) {
 
         }
     );
+
+}
+
+
+// ========================================
+// ⭐ TAS GAS 共用 POST 函式
+//
+// 這裡只負責連接「TAS 打卡 GAS」
+//
+// Teacher Feedback 不會使用這個函式。
+// ========================================
+
+async function postToTAS(payload) {
+
+    console.log(
+        "📤 TAS GAS 傳送資料：",
+        payload
+    );
+
+
+    const response =
+        await fetch(
+            SCRIPT_URL,
+            {
+
+                method: "POST",
+
+                headers: {
+
+                    "Content-Type":
+                        "text/plain;charset=utf-8"
+
+                },
+
+                body:
+                    JSON.stringify(
+                        payload
+                    )
+
+            }
+        );
+
+
+    console.log(
+        "📡 TAS GAS HTTP Status：",
+        response.status
+    );
+
+
+    const text =
+        await response.text();
+
+
+    console.log(
+        "📥 TAS GAS 原始回傳：",
+        text
+    );
+
+
+    let result;
+
+
+    try {
+
+        result =
+            JSON.parse(text);
+
+    }
+
+    catch (parseError) {
+
+        throw new Error(
+            "Google Apps Script 回傳的不是 JSON：" +
+            text.substring(0, 300)
+        );
+
+    }
+
+
+    console.log(
+        "📥 TAS GAS JSON 回傳：",
+        result
+    );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            "HTTP " +
+            response.status
+        );
+
+    }
+
+
+    // ====================================
+    // 同時支援：
+    //
+    // success: true
+    //
+    // 或
+    //
+    // status: "success"
+    //
+    // 讓前後端比較不容易因格式不同而失敗。
+    // ====================================
+
+    const isSuccess =
+        (
+            result &&
+            result.success === true
+        )
+        ||
+        (
+            result &&
+            result.status === "success"
+        );
+
+
+    if (!isSuccess) {
+
+        throw new Error(
+            result &&
+            result.message
+                ? result.message
+                : "Google Apps Script 儲存失敗"
+        );
+
+    }
+
+
+    return result;
 
 }
 
@@ -691,6 +851,7 @@ function createMonthOptions() {
 
     let html = "";
 
+
     for (
         let i = 1;
         i <= 12;
@@ -705,6 +866,7 @@ function createMonthOptions() {
 
     }
 
+
     return html;
 
 }
@@ -717,6 +879,7 @@ function createMonthOptions() {
 function createDayOptions() {
 
     let html = "";
+
 
     for (
         let i = 1;
@@ -731,6 +894,7 @@ function createDayOptions() {
         `;
 
     }
+
 
     return html;
 
@@ -1215,7 +1379,10 @@ function handlePhotoSelect(event) {
     }
 
 
+    // ====================================
     // 必須是圖片
+    // ====================================
+
     if (
         !file.type.startsWith("image/")
     ) {
@@ -1244,7 +1411,10 @@ function handlePhotoSelect(event) {
         escapeHTML(file.name);
 
 
+    // ====================================
     // 顯示照片預覽
+    // ====================================
+
     const reader =
         new FileReader();
 
@@ -1311,6 +1481,8 @@ function updateClockInButton() {
 
 // ========================================
 // ⭐ Clock In
+//
+// 使用：① TAS GAS
 // ========================================
 
 async function clockIn() {
@@ -1376,13 +1548,17 @@ async function clockIn() {
         );
 
 
+    if (!clockButton) {
+        return;
+    }
+
+
     // ----------------------------------------
     // 開始處理
     // ----------------------------------------
 
     clockButton.disabled =
         true;
-
 
     clockButton.textContent =
         "⏳ 照片處理中...";
@@ -1510,7 +1686,7 @@ async function clockIn() {
 
 
         // ====================================
-        // 4. 傳送 Google Apps Script
+        // 4. 傳送 TAS GAS
         // ====================================
 
         message.innerHTML = `
@@ -1525,96 +1701,36 @@ async function clockIn() {
         `;
 
 
-        const response =
-            await fetch(
-                SCRIPT_URL,
-                {
-
-                    method: "POST",
-
-                    headers: {
-
-                        "Content-Type":
-                            "text/plain;charset=utf-8"
-
-                    },
-
-                    body:
-                        JSON.stringify(
-                            payload
-                        )
-
-                }
-            );
-
-
-        console.log(
-            "📡 HTTP Status：",
-            response.status
-        );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                "HTTP " +
-                response.status
-            );
-
-        }
-
-
-        // ====================================
-        // 5. 讀取 Google Apps Script 回傳
-        // ====================================
-
         const result =
-            await response.json();
-
-
-        console.log(
-            "📥 Google Apps Script 回傳：",
-            result
-        );
-
-
-        // ====================================
-        // 6. 判斷成功
-        // ====================================
-
-        if (
-            !result ||
-            result.success !== true
-        ) {
-
-            throw new Error(
-                result &&
-                result.message
-                    ? result.message
-                    : "Google Apps Script 儲存失敗"
+            await postToTAS(
+                payload
             );
 
-        }
-
 
         // ====================================
-        // 7. 成功
+        // 5. 成功
         // ====================================
 
         console.log(
-            "✅ Clock In 成功"
+            "✅ Clock In 成功：",
+            result
         );
 
 
         console.log(
             "📷 Drive File ID：",
-            result.photoFileId
+            result.photoFileId ||
+            result.photoFileID ||
+            result.fileId ||
+            ""
         );
 
 
         console.log(
             "📷 Drive URL：",
-            result.photoUrl
+            result.photoUrl ||
+            result.fileUrl ||
+            ""
         );
 
 
@@ -1735,6 +1851,8 @@ async function clockIn() {
 
 // ========================================
 // Lunch / Dinner
+//
+// 使用：① TAS GAS
 // ========================================
 
 function showLunch() {
@@ -1832,6 +1950,8 @@ function showLunch() {
 
 // ========================================
 // 儲存午餐／晚餐
+//
+// 使用：① TAS GAS
 // ========================================
 
 async function saveLunch() {
@@ -1950,62 +2070,20 @@ async function saveLunch() {
 
     try {
 
-        const response =
-            await fetch(
-                SCRIPT_URL,
-                {
-
-                    method: "POST",
-
-                    headers: {
-
-                        "Content-Type":
-                            "text/plain;charset=utf-8"
-
-                    },
-
-                    body:
-                        JSON.stringify(
-                            payload
-                        )
-
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                "HTTP " +
-                response.status
-            );
-
-        }
-
+        // ====================================
+        // 使用 TAS GAS
+        // ====================================
 
         const result =
-            await response.json();
+            await postToTAS(
+                payload
+            );
 
 
         console.log(
-            "📥 Lunch 回傳：",
+            "✅ Lunch 成功：",
             result
         );
-
-
-        if (
-            !result ||
-            result.success !== true
-        ) {
-
-            throw new Error(
-                result &&
-                result.message
-                    ? result.message
-                    : "儲存失敗"
-            );
-
-        }
 
 
         message.innerHTML = `
@@ -2077,7 +2155,7 @@ async function saveLunch() {
     catch (error) {
 
         console.error(
-            "Lunch Error:",
+            "❌ Lunch Error:",
             error
         );
 
@@ -2188,6 +2266,8 @@ function showFinishWork() {
 
 // ========================================
 // Clock Out
+//
+// 使用：① TAS GAS
 // ========================================
 
 async function clockOut() {
@@ -2233,6 +2313,11 @@ async function clockOut() {
         );
 
 
+    if (!button) {
+        return;
+    }
+
+
     button.disabled =
         true;
 
@@ -2254,62 +2339,20 @@ async function clockOut() {
 
     try {
 
-        const response =
-            await fetch(
-                SCRIPT_URL,
-                {
-
-                    method: "POST",
-
-                    headers: {
-
-                        "Content-Type":
-                            "text/plain;charset=utf-8"
-
-                    },
-
-                    body:
-                        JSON.stringify(
-                            payload
-                        )
-
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                "HTTP " +
-                response.status
-            );
-
-        }
-
+        // ====================================
+        // 使用 TAS GAS
+        // ====================================
 
         const result =
-            await response.json();
+            await postToTAS(
+                payload
+            );
 
 
         console.log(
-            "📥 Clock Out 回傳：",
+            "✅ Clock Out 成功：",
             result
         );
-
-
-        if (
-            !result ||
-            result.success !== true
-        ) {
-
-            throw new Error(
-                result &&
-                result.message
-                    ? result.message
-                    : "打卡失敗"
-            );
-
-        }
 
 
         message.innerHTML = `
@@ -2372,7 +2415,7 @@ async function clockOut() {
     catch (error) {
 
         console.error(
-            "Clock Out Error:",
+            "❌ Clock Out Error:",
             error
         );
 
@@ -2410,6 +2453,12 @@ async function clockOut() {
 
 // ========================================
 // Teacher Feedback
+//
+// 注意：
+// 這裡完全使用「② Teacher Feedback GAS」
+//
+// 不使用 SCRIPT_URL。
+// 不使用 TAS GAS。
 // ========================================
 
 function showFeedback() {
@@ -2465,6 +2514,8 @@ function showFeedback() {
 
 // ========================================
 // 取得教師評語
+//
+// 使用：② Teacher Feedback GAS
 // ========================================
 
 async function fetchFeedback() {
@@ -2477,10 +2528,29 @@ async function fetchFeedback() {
 
     try {
 
+        if (!currentStudent) {
+
+            throw new Error(
+                "目前沒有登入學生"
+            );
+
+        }
+
+
+        // ====================================
+        // 防止瀏覽器快取
+        // ====================================
+
         const url =
             FEEDBACK_URL +
             "?nocache=" +
             Date.now();
+
+
+        console.log(
+            "📤 讀取 Teacher Feedback GAS：",
+            url
+        );
 
 
         const response =
@@ -2493,6 +2563,12 @@ async function fetchFeedback() {
             );
 
 
+        console.log(
+            "📡 Teacher Feedback HTTP Status：",
+            response.status
+        );
+
+
         if (!response.ok) {
 
             throw new Error(
@@ -2503,9 +2579,49 @@ async function fetchFeedback() {
         }
 
 
-        const data =
-            await response.json();
+        // ====================================
+        // 讀取回傳文字
+        // ====================================
 
+        const text =
+            await response.text();
+
+
+        console.log(
+            "📥 Teacher Feedback 原始回傳：",
+            text
+        );
+
+
+        let data;
+
+
+        try {
+
+            data =
+                JSON.parse(text);
+
+        }
+
+        catch (parseError) {
+
+            throw new Error(
+                "Teacher Feedback API 回傳的不是 JSON：" +
+                text.substring(0, 300)
+            );
+
+        }
+
+
+        console.log(
+            "📥 Teacher Feedback JSON：",
+            data
+        );
+
+
+        // ====================================
+        // 確認是陣列
+        // ====================================
 
         if (
             !Array.isArray(data)
@@ -2518,20 +2634,19 @@ async function fetchFeedback() {
         }
 
 
-        if (!currentStudent) {
-
-            throw new Error(
-                "目前沒有登入學生"
-            );
-
-        }
-
+        // ====================================
+        // 目前學生
+        // ====================================
 
         const targetName =
             String(
                 currentStudent.name
             ).trim();
 
+
+        // ====================================
+        // 整理資料
+        // ====================================
 
         const records =
             data
@@ -2577,6 +2692,7 @@ async function fetchFeedback() {
                     }
                 )
 
+
                 .filter(
                     function(record) {
 
@@ -2594,6 +2710,16 @@ async function fetchFeedback() {
                     }
                 );
 
+
+        console.log(
+            "💬 目前學生評語數量：",
+            records.length
+        );
+
+
+        // ====================================
+        // 沒有評語
+        // ====================================
 
         if (
             records.length === 0
@@ -2642,6 +2768,11 @@ async function fetchFeedback() {
         }
 
 
+        // ====================================
+        // 日期排序
+        // 最新日期在前面
+        // ====================================
+
         records.sort(
             function(a, b) {
 
@@ -2662,6 +2793,10 @@ async function fetchFeedback() {
             }
         );
 
+
+        // ====================================
+        // 依日期分組
+        // ====================================
 
         const groupedRecords = {};
 
@@ -2704,6 +2839,10 @@ async function fetchFeedback() {
         );
 
 
+        // ====================================
+        // 日期排序
+        // ====================================
+
         const sortedDates =
             Object.keys(
                 groupedRecords
@@ -2724,6 +2863,10 @@ async function fetchFeedback() {
         let feedbackHTML =
             "";
 
+
+        // ====================================
+        // 建立評語畫面
+        // ====================================
 
         sortedDates.forEach(
             function(date) {
@@ -2839,6 +2982,10 @@ async function fetchFeedback() {
         );
 
 
+        // ====================================
+        // 顯示評語
+        // ====================================
+
         message.className = "";
 
 
@@ -2862,7 +3009,7 @@ async function fetchFeedback() {
     catch (error) {
 
         console.error(
-            "Fetch Feedback Error:",
+            "❌ Fetch Feedback Error:",
             error
         );
 
@@ -2896,5 +3043,24 @@ async function fetchFeedback() {
 
 document.addEventListener(
     "DOMContentLoaded",
-    showHome
+    function() {
+
+        console.log(
+            "🚀 TAS App 啟動"
+        );
+
+        console.log(
+            "📌 TAS GAS：",
+            SCRIPT_URL
+        );
+
+        console.log(
+            "📌 Teacher Feedback GAS：",
+            FEEDBACK_URL
+        );
+
+        showHome();
+
+    }
 );
+```
