@@ -1,27 +1,24 @@
-```javascript
 // ========================================
 // TAS 打卡系統
 // VS Code 完整版
 //
-// 前端只有一個 script.js
+// 功能：
+// 1. 學生登入
+// 2. 生日驗證
+// 3. Start Work / Clock In
+// 4. 工作照片上傳
+// 5. Lunch / Dinner
+// 6. Finish Work / Clock Out
+// 7. Teacher Feedback
 //
-// 但是後端維持兩套 Google Apps Script：
-//
-// ① TAS GAS
-//    - Clock In
-//    - 工作照片
-//    - Lunch / Dinner
-//    - Clock Out
-//
-// ② Teacher Feedback GAS
-//    - 教師評語
-//
-// 兩套 GAS 完全獨立，不合併。
+// 注意：
+// TAS 打卡 GAS 與 Teacher Feedback GAS
+// 是兩套完全獨立的 Google Apps Script
 // ========================================
 
 
 // ========================================
-// ① TAS 打卡 Google Apps Script
+// ① TAS Google Apps Script
 // ========================================
 
 const SCRIPT_URL =
@@ -168,7 +165,7 @@ function escapeHTML(str) {
 
 
 // ========================================
-// 教師評語文字清理
+// 清除教師評語文字
 // ========================================
 
 function cleanFeedbackText(text) {
@@ -191,7 +188,8 @@ function cleanFeedbackText(text) {
 
 
 // ========================================
-// 日期
+// 日期格式
+// YYYY-MM-DD
 // ========================================
 
 function formatDate(date) {
@@ -215,7 +213,8 @@ function formatDate(date) {
 
 
 // ========================================
-// 時間
+// 時間格式
+// HH:MM:SS
 // ========================================
 
 function formatTime(date) {
@@ -251,11 +250,15 @@ function parseFeedbackDate(dateValue) {
         dateValue === undefined ||
         dateValue === ""
     ) {
+
         return 0;
+
     }
+
 
     let value =
         String(dateValue).trim();
+
 
     value =
         value.replace(/\//g, "-");
@@ -304,8 +307,14 @@ function parseFeedbackDate(dateValue) {
         new Date(value);
 
 
-    if (!isNaN(parsed.getTime())) {
+    if (
+        !isNaN(
+            parsed.getTime()
+        )
+    ) {
+
         return parsed.getTime();
+
     }
 
 
@@ -459,7 +468,7 @@ function compressImage(file) {
 
 
 // ========================================
-// ⭐ Blob → Base64
+// Blob → Base64
 // ========================================
 
 function blobToBase64(blob) {
@@ -474,11 +483,18 @@ function blobToBase64(blob) {
             reader.onloadend =
                 function() {
 
-                    const result =
-                        reader.result;
+                    try {
 
+                        const result =
+                            reader.result;
 
-                    if (!result) {
+                        const base64 =
+                            result.split(",")[1];
+
+                        resolve(base64);
+
+                    }
+                    catch (error) {
 
                         reject(
                             new Error(
@@ -486,33 +502,7 @@ function blobToBase64(blob) {
                             )
                         );
 
-                        return;
-
                     }
-
-
-                    const parts =
-                        result.split(",");
-
-
-                    if (parts.length < 2) {
-
-                        reject(
-                            new Error(
-                                "無法取得照片 Base64"
-                            )
-                        );
-
-                        return;
-
-                    }
-
-
-                    const base64 =
-                        parts[1];
-
-
-                    resolve(base64);
 
                 };
 
@@ -538,56 +528,52 @@ function blobToBase64(blob) {
 
 
 // ========================================
-// ⭐ TAS GAS 共用 POST 函式
+// ⭐ TAS GAS POST 共用函式
 //
-// 這裡只負責連接「TAS 打卡 GAS」
+// 只有 TAS 打卡系統會使用這個函式
 //
-// Teacher Feedback 不會使用這個函式。
+// Teacher Feedback 不使用這個函式
 // ========================================
 
 async function postToTAS(payload) {
-
-    console.log(
-        "📤 TAS GAS 傳送資料：",
-        payload
-    );
-
 
     const response =
         await fetch(
             SCRIPT_URL,
             {
-
                 method: "POST",
 
                 headers: {
-
                     "Content-Type":
                         "text/plain;charset=utf-8"
-
                 },
 
                 body:
-                    JSON.stringify(
-                        payload
-                    )
-
+                    JSON.stringify(payload)
             }
         );
 
 
-    console.log(
-        "📡 TAS GAS HTTP Status：",
-        response.status
-    );
+    if (!response.ok) {
 
+        throw new Error(
+            "HTTP " +
+            response.status
+        );
+
+    }
+
+
+    // 先用 text 取得回傳內容
+    // 避免 GAS 回傳格式稍有差異時
+    // response.json() 直接失敗
 
     const text =
         await response.text();
 
 
     console.log(
-        "📥 TAS GAS 原始回傳：",
+        "TAS GAS 原始回傳：",
         text
     );
 
@@ -601,64 +587,44 @@ async function postToTAS(payload) {
             JSON.parse(text);
 
     }
-
-    catch (parseError) {
+    catch (error) {
 
         throw new Error(
-            "Google Apps Script 回傳的不是 JSON：" +
-            text.substring(0, 300)
+            "TAS GAS 回傳的不是有效 JSON：" +
+            text
         );
 
     }
 
 
     console.log(
-        "📥 TAS GAS JSON 回傳：",
+        "TAS GAS JSON 回傳：",
         result
     );
 
 
-    if (!response.ok) {
-
-        throw new Error(
-            "HTTP " +
-            response.status
-        );
-
-    }
-
-
-    // ====================================
-    // 同時支援：
+    // 接受兩種成功格式：
     //
-    // success: true
+    // { "status": "success" }
     //
     // 或
     //
-    // status: "success"
-    //
-    // 讓前後端比較不容易因格式不同而失敗。
-    // ====================================
+    // { "success": true }
 
     const isSuccess =
+        result &&
         (
-            result &&
+            result.status === "success" ||
             result.success === true
-        )
-        ||
-        (
-            result &&
-            result.status === "success"
         );
 
 
     if (!isSuccess) {
 
         throw new Error(
-            result &&
-            result.message
-                ? result.message
-                : "Google Apps Script 儲存失敗"
+            result.message ||
+            result.error ||
+            "TAS GAS 儲存失敗"
         );
 
     }
@@ -756,7 +722,7 @@ function showHome() {
 
 
 // ========================================
-// 生日驗證
+// 生日驗證頁面
 // ========================================
 
 function showBirthdayVerification(index) {
@@ -941,13 +907,11 @@ function verifyBirthday() {
             currentStudent.birthdayDay
     ) {
 
-        error.textContent =
-            "";
+        error.textContent = "";
 
         showMainMenu();
 
     }
-
     else {
 
         error.textContent =
@@ -1267,7 +1231,7 @@ function showStartWork() {
 
 
     // ========================================
-    // 照片
+    // 工作照片
     // ========================================
 
     document
@@ -1294,10 +1258,6 @@ function showStartWork() {
         );
 
 
-    // ========================================
-    // 返回
-    // ========================================
-
     document
         .getElementById(
             "backMenuButton"
@@ -1320,19 +1280,13 @@ function chooseWorkplace(workplace) {
         workplace;
 
 
-    const selected =
-        document.getElementById(
+    document
+        .getElementById(
             "selectedWorkplace"
-        );
-
-
-    if (selected) {
-
-        selected.textContent =
+        )
+        .textContent =
             "Selected: " +
             workplace;
-
-    }
 
 
     updateClockInButton();
@@ -1379,12 +1333,10 @@ function handlePhotoSelect(event) {
     }
 
 
-    // ====================================
-    // 必須是圖片
-    // ====================================
-
     if (
-        !file.type.startsWith("image/")
+        !file.type.startsWith(
+            "image/"
+        )
     ) {
 
         selectedPhotoFile = null;
@@ -1408,12 +1360,10 @@ function handlePhotoSelect(event) {
 
     status.innerHTML =
         "✅ 已選擇照片：<br>" +
-        escapeHTML(file.name);
+        escapeHTML(
+            file.name
+        );
 
-
-    // ====================================
-    // 顯示照片預覽
-    // ====================================
 
     const reader =
         new FileReader();
@@ -1468,7 +1418,6 @@ function updateClockInButton() {
             false;
 
     }
-
     else {
 
         button.style.display =
@@ -1481,15 +1430,9 @@ function updateClockInButton() {
 
 // ========================================
 // ⭐ Clock In
-//
-// 使用：① TAS GAS
 // ========================================
 
 async function clockIn() {
-
-    // ----------------------------------------
-    // 檢查學生
-    // ----------------------------------------
 
     if (!currentStudent) {
 
@@ -1502,10 +1445,6 @@ async function clockIn() {
     }
 
 
-    // ----------------------------------------
-    // 檢查工作場所
-    // ----------------------------------------
-
     if (!selectedWorkplace) {
 
         alert(
@@ -1516,10 +1455,6 @@ async function clockIn() {
 
     }
 
-
-    // ----------------------------------------
-    // 檢查照片
-    // ----------------------------------------
 
     if (!selectedPhotoFile) {
 
@@ -1548,17 +1483,9 @@ async function clockIn() {
         );
 
 
-    if (!clockButton) {
-        return;
-    }
-
-
-    // ----------------------------------------
-    // 開始處理
-    // ----------------------------------------
-
     clockButton.disabled =
         true;
+
 
     clockButton.textContent =
         "⏳ 照片處理中...";
@@ -1567,9 +1494,7 @@ async function clockIn() {
     message.innerHTML = `
 
         <div class="loading">
-
             📷 正在處理工作照片...
-
         </div>
 
     `;
@@ -1578,14 +1503,8 @@ async function clockIn() {
     try {
 
         // ====================================
-        // 1. 壓縮照片
+        // 壓縮照片
         // ====================================
-
-        console.log(
-            "📷 原始照片大小：",
-            selectedPhotoFile.size
-        );
-
 
         const compressedBlob =
             await compressImage(
@@ -1593,26 +1512,18 @@ async function clockIn() {
             );
 
 
-        console.log(
-            "📷 壓縮後照片大小：",
-            compressedBlob.size
-        );
-
-
         message.innerHTML = `
 
             <div class="loading">
-
                 📷 照片處理完成<br>
-                ⏳ 正在準備上傳...
-
+                ⏳ 正在上傳打卡資料...
             </div>
 
         `;
 
 
         // ====================================
-        // 2. Base64
+        // Base64
         // ====================================
 
         const photoBase64 =
@@ -1621,23 +1532,8 @@ async function clockIn() {
             );
 
 
-        console.log(
-            "📷 Base64 長度：",
-            photoBase64.length
-        );
-
-
-        console.log(
-            "📷 Base64 前 50 字元：",
-            photoBase64.substring(
-                0,
-                50
-            )
-        );
-
-
         // ====================================
-        // 3. 建立 Payload
+        // Payload
         // ====================================
 
         const payload = {
@@ -1664,7 +1560,7 @@ async function clockIn() {
 
 
         console.log(
-            "📤 準備傳送 Clock In：",
+            "Clock In Payload：",
             {
                 studentName:
                     payload.studentName,
@@ -1680,26 +1576,13 @@ async function clockIn() {
 
                 photoBase64Length:
                     payload.photoBase64.length
-
             }
         );
 
 
         // ====================================
-        // 4. 傳送 TAS GAS
+        // 傳送 TAS GAS
         // ====================================
-
-        message.innerHTML = `
-
-            <div class="loading">
-
-                📤 正在上傳照片與簽到資料...<br>
-                請不要關閉頁面
-
-            </div>
-
-        `;
-
 
         const result =
             await postToTAS(
@@ -1707,32 +1590,15 @@ async function clockIn() {
             );
 
 
-        // ====================================
-        // 5. 成功
-        // ====================================
-
         console.log(
-            "✅ Clock In 成功：",
+            "Clock In GAS 回傳：",
             result
         );
 
 
-        console.log(
-            "📷 Drive File ID：",
-            result.photoFileId ||
-            result.photoFileID ||
-            result.fileId ||
-            ""
-        );
-
-
-        console.log(
-            "📷 Drive URL：",
-            result.photoUrl ||
-            result.fileUrl ||
-            ""
-        );
-
+        // ====================================
+        // 成功
+        // ====================================
 
         message.innerHTML = `
 
@@ -1771,7 +1637,7 @@ async function clockIn() {
                 </p>
 
                 <p>
-                    📷 工作照片已成功上傳
+                    📷 工作照片已上傳
                 </p>
 
                 <br>
@@ -1805,11 +1671,10 @@ async function clockIn() {
             );
 
     }
-
     catch (error) {
 
         console.error(
-            "❌ Clock In Error:",
+            "Clock In Error:",
             error
         );
 
@@ -1836,10 +1701,6 @@ async function clockIn() {
                     )}
                 </p>
 
-                <p>
-                    請確認網路連線及 Google Apps Script 設定。
-                </p>
-
             </div>
 
         `;
@@ -1851,8 +1712,6 @@ async function clockIn() {
 
 // ========================================
 // Lunch / Dinner
-//
-// 使用：① TAS GAS
 // ========================================
 
 function showLunch() {
@@ -1949,9 +1808,7 @@ function showLunch() {
 
 
 // ========================================
-// 儲存午餐／晚餐
-//
-// 使用：① TAS GAS
+// 儲存午餐
 // ========================================
 
 async function saveLunch() {
@@ -2070,10 +1927,6 @@ async function saveLunch() {
 
     try {
 
-        // ====================================
-        // 使用 TAS GAS
-        // ====================================
-
         const result =
             await postToTAS(
                 payload
@@ -2081,7 +1934,7 @@ async function saveLunch() {
 
 
         console.log(
-            "✅ Lunch 成功：",
+            "Lunch GAS 回傳：",
             result
         );
 
@@ -2151,11 +2004,10 @@ async function saveLunch() {
             );
 
     }
-
     catch (error) {
 
         console.error(
-            "❌ Lunch Error:",
+            "Lunch Error:",
             error
         );
 
@@ -2266,8 +2118,6 @@ function showFinishWork() {
 
 // ========================================
 // Clock Out
-//
-// 使用：① TAS GAS
 // ========================================
 
 async function clockOut() {
@@ -2313,11 +2163,6 @@ async function clockOut() {
         );
 
 
-    if (!button) {
-        return;
-    }
-
-
     button.disabled =
         true;
 
@@ -2329,19 +2174,13 @@ async function clockOut() {
     message.innerHTML = `
 
         <div class="loading">
-
             正在傳送下班資料...
-
         </div>
 
     `;
 
 
     try {
-
-        // ====================================
-        // 使用 TAS GAS
-        // ====================================
 
         const result =
             await postToTAS(
@@ -2350,7 +2189,7 @@ async function clockOut() {
 
 
         console.log(
-            "✅ Clock Out 成功：",
+            "Clock Out GAS 回傳：",
             result
         );
 
@@ -2411,11 +2250,10 @@ async function clockOut() {
             );
 
     }
-
     catch (error) {
 
         console.error(
-            "❌ Clock Out Error:",
+            "Clock Out Error:",
             error
         );
 
@@ -2454,11 +2292,9 @@ async function clockOut() {
 // ========================================
 // Teacher Feedback
 //
-// 注意：
-// 這裡完全使用「② Teacher Feedback GAS」
-//
-// 不使用 SCRIPT_URL。
-// 不使用 TAS GAS。
+// ⚠️ 這裡只使用 FEEDBACK_URL
+// ⚠️ 不會使用 SCRIPT_URL
+// ⚠️ 不會寫入 TAS Sheet
 // ========================================
 
 function showFeedback() {
@@ -2515,7 +2351,8 @@ function showFeedback() {
 // ========================================
 // 取得教師評語
 //
-// 使用：② Teacher Feedback GAS
+// Teacher Feedback GAS
+// 使用 GET
 // ========================================
 
 async function fetchFeedback() {
@@ -2528,6 +2365,15 @@ async function fetchFeedback() {
 
     try {
 
+        if (!message) {
+
+            throw new Error(
+                "找不到評語顯示區域"
+            );
+
+        }
+
+
         if (!currentStudent) {
 
             throw new Error(
@@ -2538,7 +2384,7 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 防止瀏覽器快取
+        // 防止快取
         // ====================================
 
         const url =
@@ -2548,10 +2394,14 @@ async function fetchFeedback() {
 
 
         console.log(
-            "📤 讀取 Teacher Feedback GAS：",
+            "Teacher Feedback URL：",
             url
         );
 
+
+        // ====================================
+        // GET
+        // ====================================
 
         const response =
             await fetch(
@@ -2561,12 +2411,6 @@ async function fetchFeedback() {
                     cache: "no-store"
                 }
             );
-
-
-        console.log(
-            "📡 Teacher Feedback HTTP Status：",
-            response.status
-        );
 
 
         if (!response.ok) {
@@ -2580,7 +2424,8 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 讀取回傳文字
+        // 先讀文字
+        // 再 JSON.parse
         // ====================================
 
         const text =
@@ -2588,7 +2433,7 @@ async function fetchFeedback() {
 
 
         console.log(
-            "📥 Teacher Feedback 原始回傳：",
+            "Teacher Feedback API 原始文字：",
             text
         );
 
@@ -2602,30 +2447,26 @@ async function fetchFeedback() {
                 JSON.parse(text);
 
         }
-
-        catch (parseError) {
+        catch (error) {
 
             throw new Error(
-                "Teacher Feedback API 回傳的不是 JSON：" +
-                text.substring(0, 300)
+                "Teacher Feedback API 回傳的不是有效 JSON"
             );
 
         }
 
 
         console.log(
-            "📥 Teacher Feedback JSON：",
+            "Teacher Feedback API JSON：",
             data
         );
 
 
         // ====================================
-        // 確認是陣列
+        // 確認陣列
         // ====================================
 
-        if (
-            !Array.isArray(data)
-        ) {
+        if (!Array.isArray(data)) {
 
             throw new Error(
                 "Teacher Feedback API 回傳的不是陣列"
@@ -2644,13 +2485,18 @@ async function fetchFeedback() {
             ).trim();
 
 
+        console.log(
+            "目前學生：",
+            targetName
+        );
+
+
         // ====================================
-        // 整理資料
+        // 篩選目前學生
         // ====================================
 
         const records =
             data
-
                 .map(
                     function(record) {
 
@@ -2691,20 +2537,14 @@ async function fetchFeedback() {
 
                     }
                 )
-
-
                 .filter(
                     function(record) {
 
                         return (
-
                             record.studentName ===
                             targetName
-
                             &&
-
                             record.feedback !== ""
-
                         );
 
                     }
@@ -2712,8 +2552,8 @@ async function fetchFeedback() {
 
 
         console.log(
-            "💬 目前學生評語數量：",
-            records.length
+            "找到目前學生的全部評語：",
+            records
         );
 
 
@@ -2769,210 +2609,108 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 日期排序
-        // 最新日期在前面
+        // 最新日期在最上面
         // ====================================
 
         records.sort(
             function(a, b) {
 
-                const dateA =
-                    parseFeedbackDate(
-                        a.date
-                    );
-
-
-                const dateB =
-                    parseFeedbackDate(
-                        b.date
-                    );
-
-
-                return dateB - dateA;
+                return (
+                    parseFeedbackDate(b.date) -
+                    parseFeedbackDate(a.date)
+                );
 
             }
         );
 
 
         // ====================================
-        // 依日期分組
+        // 建立評語卡片
         // ====================================
-
-        const groupedRecords = {};
-
-
-        records.forEach(
-            function(record) {
-
-                let displayDate =
-                    record.date ||
-                    "日期未提供";
-
-
-                displayDate =
-                    String(displayDate)
-                        .trim()
-                        .replace(
-                            /\//g,
-                            "-"
-                        );
-
-
-                if (
-                    !groupedRecords[
-                        displayDate
-                    ]
-                ) {
-
-                    groupedRecords[
-                        displayDate
-                    ] = [];
-
-                }
-
-
-                groupedRecords[
-                    displayDate
-                ].push(record);
-
-            }
-        );
-
-
-        // ====================================
-        // 日期排序
-        // ====================================
-
-        const sortedDates =
-            Object.keys(
-                groupedRecords
-            )
-            .sort(
-                function(a, b) {
-
-                    return (
-                        parseFeedbackDate(b)
-                        -
-                        parseFeedbackDate(a)
-                    );
-
-                }
-            );
-
 
         let feedbackHTML =
             "";
 
 
-        // ====================================
-        // 建立評語畫面
-        // ====================================
+        records.forEach(
+            function(record, index) {
 
-        sortedDates.forEach(
-            function(date) {
-
-                const dateRecords =
-                    groupedRecords[
-                        date
-                    ];
+                const displayDate =
+                    record.date ||
+                    "日期未提供";
 
 
                 feedbackHTML += `
 
                     <div
                         style="
-                            margin-bottom:30px;
+                            background:#ffffff;
+                            padding:20px;
+                            margin-bottom:16px;
+                            border-radius:16px;
+                            border:1px solid #dbeafe;
+                            box-shadow:
+                                0 3px 10px
+                                rgba(
+                                    0,
+                                    0,
+                                    0,
+                                    0.07
+                                );
+                            text-align:left;
                         "
                     >
 
+                        <!-- 評語編號 -->
+
                         <div
                             style="
-                                background:
-                                    linear-gradient(
-                                        135deg,
-                                        #2563eb,
-                                        #3b82f6
-                                    );
-                                color:white;
-                                padding:14px 20px;
-                                border-radius:14px;
-                                font-size:18px;
-                                font-weight:bold;
-                                margin-bottom:14px;
-                                box-shadow:
-                                    0 3px 10px
-                                    rgba(
-                                        37,
-                                        99,
-                                        235,
-                                        0.20
-                                    );
+                                color:#64748b;
+                                font-size:13px;
+                                margin-bottom:10px;
                             "
                         >
-                            📅 ${escapeHTML(date)}
+                            💬 評語 ${index + 1}
                         </div>
 
-                `;
+
+                        <!-- 日期 -->
+
+                        <div
+                            style="
+                                display:inline-block;
+                                background:#eff6ff;
+                                color:#1d4ed8;
+                                padding:6px 12px;
+                                border-radius:20px;
+                                font-size:14px;
+                                margin-bottom:12px;
+                            "
+                        >
+                            📅
+                            ${escapeHTML(
+                                displayDate
+                            )}
+                        </div>
 
 
-                dateRecords.forEach(
-                    function(record, index) {
+                        <!-- 評語內容 -->
 
-                        feedbackHTML += `
+                        <div
+                            style="
+                                font-size:16px;
+                                color:#1e293b;
+                                line-height:1.6;
+                                white-space:pre-wrap;
+                                overflow-wrap:break-word;
+                                word-break:break-word;
+                            "
+                        >
+                            ${escapeHTML(
+                                record.feedback
+                            )}
+                        </div>
 
-                            <div
-                                style="
-                                    background:#ffffff;
-                                    padding:20px;
-                                    margin-bottom:12px;
-                                    border-radius:16px;
-                                    border:1px solid #dbeafe;
-                                    box-shadow:
-                                        0 3px 10px
-                                        rgba(
-                                            0,
-                                            0,
-                                            0,
-                                            0.07
-                                        );
-                                    text-align:left;
-                                "
-                            >
-
-                                <div
-                                    style="
-                                        color:#64748b;
-                                        font-size:13px;
-                                        margin-bottom:10px;
-                                    "
-                                >
-                                    💬 第 ${index + 1} 則評語
-                                </div>
-
-                                <div
-                                    style="
-                                        font-size:16px;
-                                        color:#1e293b;
-                                        line-height:1.7;
-                                        white-space:pre-line;
-                                        overflow-wrap:break-word;
-                                        word-break:break-word;
-                                    "
-                                >
-                                    ${escapeHTML(
-                                        record.feedback
-                                    )}
-                                </div>
-
-                            </div>
-
-                        `;
-
-                    }
-                );
-
-
-                feedbackHTML += `
 
                     </div>
 
@@ -2983,7 +2721,7 @@ async function fetchFeedback() {
 
 
         // ====================================
-        // 顯示評語
+        // 顯示
         // ====================================
 
         message.className = "";
@@ -3005,11 +2743,10 @@ async function fetchFeedback() {
         `;
 
     }
-
     catch (error) {
 
         console.error(
-            "❌ Fetch Feedback Error:",
+            "Fetch Feedback Error:",
             error
         );
 
@@ -3043,24 +2780,5 @@ async function fetchFeedback() {
 
 document.addEventListener(
     "DOMContentLoaded",
-    function() {
-
-        console.log(
-            "🚀 TAS App 啟動"
-        );
-
-        console.log(
-            "📌 TAS GAS：",
-            SCRIPT_URL
-        );
-
-        console.log(
-            "📌 Teacher Feedback GAS：",
-            FEEDBACK_URL
-        );
-
-        showHome();
-
-    }
+    showHome
 );
-```
