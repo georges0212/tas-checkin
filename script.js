@@ -1,1377 +1,2758 @@
-const SPREADSHEET_ID = "1A_y-qEnuULO22t-z_ES2pgHOFEo1-GHePM5CGJYP9Cw";
-const PHOTO_FOLDER_ID = "1fKlhdlwpvghqBYCbvIZEjNy66aF3qltd";
-const SHEET_NAME = "實習紀錄";
-const TIMEZONE = "Asia/Taipei";
+// ========================================
+// TAS 打卡系統
+// VS Code 完整版
+// ========================================
 
-/* ========================================
-GET
-======================================== */
 
-function doGet(e) {
+// ========================================
+// Google Apps Script
+// ========================================
 
-return createJsonResponse({
-status: "success",
-message: "TAS Google Apps Script 正常運作"
-});
+const SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbyCM5fWJvQZkEmA2Jqt85p_tGf0n4ZkfrPS8Uw6dPTAMNcdACRf2YMmpw1QXY2_wUFQ/exec";
+
+
+// ========================================
+// Teacher Feedback Google Apps Script
+// ========================================
+
+const FEEDBACK_URL =
+    "https://script.google.com/macros/s/AKfycbyMYhHKfukCsebFG0JkDPh-0KjUTJDkQIwjSTBIgEonihoEeSqzM_L8UB2BNGY1Jfh6/exec";
+
+
+// ========================================
+// 學生資料
+// ========================================
+
+const students = [
+
+    {
+        name: "王亭磬",
+        icon: "👦",
+        birthdayMonth: 9,
+        birthdayDay: 3
+    },
+
+    {
+        name: "李昌祐",
+        icon: "👦",
+        birthdayMonth: 3,
+        birthdayDay: 10
+    },
+
+    {
+        name: "周聖哲",
+        icon: "👦",
+        birthdayMonth: 8,
+        birthdayDay: 12
+    },
+
+    {
+        name: "洪俊吉",
+        icon: "👦",
+        birthdayMonth: 12,
+        birthdayDay: 22
+    },
+
+    {
+        name: "黃丞偉",
+        icon: "👦",
+        birthdayMonth: 6,
+        birthdayDay: 2
+    },
+
+    {
+        name: "温力衡",
+        icon: "👦",
+        birthdayMonth: 1,
+        birthdayDay: 30
+    },
+
+    {
+        name: "劉哲均",
+        icon: "👦",
+        birthdayMonth: 12,
+        birthdayDay: 15
+    },
+
+    {
+        name: "顏鉦錕",
+        icon: "👦",
+        birthdayMonth: 12,
+        birthdayDay: 3
+    },
+
+    {
+        name: "王秀蘋",
+        icon: "👧",
+        birthdayMonth: 3,
+        birthdayDay: 21
+    },
+
+    {
+        name: "林妙蓉",
+        icon: "👧",
+        birthdayMonth: 1,
+        birthdayDay: 10
+    },
+
+    {
+        name: "梅庭禎",
+        icon: "👧",
+        birthdayMonth: 12,
+        birthdayDay: 18
+    },
+
+    {
+        name: "陳芸軒",
+        icon: "👧",
+        birthdayMonth: 3,
+        birthdayDay: 26
+    },
+
+    {
+        name: "蔡宜珈",
+        icon: "👧",
+        birthdayMonth: 7,
+        birthdayDay: 25
+    }
+
+];
+
+
+// ========================================
+// 系統狀態
+// ========================================
+
+let currentStudent = null;
+
+let selectedWorkplace = "";
+
+
+// ========================================
+// ⭐ 工作照片
+// ========================================
+
+let selectedPhotoFile = null;
+
+
+// ========================================
+// 輔助工具
+// ========================================
+
+function escapeHTML(str) {
+
+    if (!str) return "";
+
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
 }
 
-/* ========================================
-POST
-======================================== */
 
-function doPost(e) {
+// ========================================
+// 清除教師評語空白
+// ========================================
 
-try {
+function cleanFeedbackText(text) {
 
-```
-Logger.log("========================================");
-Logger.log("TAS doPost 開始");
-Logger.log("========================================");
+    if (!text) {
+        return "";
+    }
 
+    return String(text)
 
-if (!e) {
+        .replace(/\r\n/g, "\n")
 
-  throw new Error("沒有收到事件資料");
+        .replace(/\r/g, "\n")
 
-}
+        .replace(/^[ \t]+/gm, "")
 
+        .replace(/[ \t]+$/gm, "")
 
-if (!e.postData) {
+        .replace(/^\n+/, "")
 
-  throw new Error("沒有收到 POST 資料");
+        .replace(/\n+$/, "")
 
-}
+        .replace(/\n{3,}/g, "\n\n")
 
-
-if (!e.postData.contents) {
-
-  throw new Error("POST 內容是空的");
+        .trim();
 
 }
 
 
-Logger.log("收到 POST 資料");
-Logger.log("資料長度：" + e.postData.contents.length);
+// ========================================
+// 日期
+// ========================================
 
+function formatDate(date) {
 
-let data;
+    const y =
+        date.getFullYear();
 
+    const m =
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
 
-try {
+    const d =
+        String(
+            date.getDate()
+        ).padStart(2, "0");
 
-  data = JSON.parse(e.postData.contents);
-
-} catch (jsonError) {
-
-  Logger.log("JSON 解析失敗：" + jsonError);
-
-  throw new Error("POST 資料不是有效的 JSON");
-
-}
-
-
-Logger.log("學生：" + (data.studentName || ""));
-Logger.log("日期：" + (data.date || ""));
-Logger.log("工作場所：" + (data.workplace || ""));
-
-
-/* ========================================
-   開始工作
-======================================== */
-
-if (data.clockInTime) {
-
-  return handleClockIn(data);
+    return `${y}-${m}-${d}`;
 
 }
 
 
-/* ========================================
-   午餐／晚餐
-======================================== */
+// ========================================
+// 時間
+// ========================================
 
-if (data.mealTime) {
+function formatTime(date) {
 
-  return handleLunch(data);
+    const h =
+        String(
+            date.getHours()
+        ).padStart(2, "0");
+
+    const m =
+        String(
+            date.getMinutes()
+        ).padStart(2, "0");
+
+    const s =
+        String(
+            date.getSeconds()
+        ).padStart(2, "0");
+
+    return `${h}:${m}:${s}`;
+
+}
+
+
+// ========================================
+// 教師評語日期解析
+// ========================================
+
+function parseFeedbackDate(dateValue) {
+
+    if (
+        dateValue === null ||
+        dateValue === undefined ||
+        dateValue === ""
+    ) {
+
+        return 0;
+
+    }
+
+    let value =
+        String(dateValue)
+            .trim();
+
+    value =
+        value.replace(
+            /\//g,
+            "-"
+        );
+
+    const match =
+        value.match(
+            /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+        );
+
+    if (match) {
+
+        const year =
+            Number(match[1]);
+
+        const month =
+            Number(match[2]);
+
+        const day =
+            Number(match[3]);
+
+        const hour =
+            Number(match[4] || 0);
+
+        const minute =
+            Number(match[5] || 0);
+
+        const second =
+            Number(match[6] || 0);
+
+        return new Date(
+            year,
+            month - 1,
+            day,
+            hour,
+            minute,
+            second
+        ).getTime();
+
+    }
+
+    const parsed =
+        new Date(value);
+
+    if (
+        !isNaN(
+            parsed.getTime()
+        )
+    ) {
+
+        return parsed.getTime();
+
+    }
+
+    return 0;
 
 }
 
 
-/* ========================================
-   完成工作
-======================================== */
+// ========================================
+// ⭐ 圖片壓縮
+// ========================================
 
-if (data.clockOutTime) {
+function compressImage(file) {
 
-  return handleClockOut(data);
+    return new Promise(
+        function(resolve, reject) {
 
-}
+            const reader =
+                new FileReader();
 
+            reader.onload =
+                function(event) {
 
-throw new Error("找不到有效的操作指令");
-```
+                    const img =
+                        new Image();
 
-} catch (error) {
+                    img.onload =
+                        function() {
 
-```
-Logger.log("========================================");
-Logger.log("❌ TAS doPost 發生錯誤");
-Logger.log(error);
-Logger.log("========================================");
+                            // 最大寬度
+                            const maxWidth = 1600;
 
+                            let width =
+                                img.width;
 
-return createJsonResponse({
-
-  status: "error",
-
-  message: error.message || String(error)
-
-});
-```
-
-}
-
-}
-
-/* ========================================
-開始工作
-======================================== */
-
-function handleClockIn(data) {
-
-Logger.log("開始處理 Clock In");
-
-const studentName =
-cleanText(data.studentName);
-
-const date =
-cleanText(data.date);
-
-const clockInTime =
-cleanText(data.clockInTime);
-
-const workplace =
-cleanText(data.workplace);
-
-if (!studentName) {
-
-```
-throw new Error("缺少學生姓名");
-```
-
-}
-
-if (!date) {
-
-```
-throw new Error("缺少日期");
-```
-
-}
-
-if (!clockInTime) {
-
-```
-throw new Error("缺少開始工作時間");
-```
-
-}
-
-if (!workplace) {
-
-```
-throw new Error("缺少工作場所");
-```
-
-}
-
-Logger.log("學生：" + studentName);
-Logger.log("日期：" + date);
-Logger.log("開始時間：" + clockInTime);
-Logger.log("工作場所：" + workplace);
-
-/* ========================================
-開啟 Google Sheet
-======================================== */
-
-const spreadsheet =
-SpreadsheetApp.openById(SPREADSHEET_ID);
-
-const sheet =
-spreadsheet.getSheetByName(SHEET_NAME);
-
-if (!sheet) {
-
-```
-throw new Error(
-  "找不到工作表：「" + SHEET_NAME + "」"
-);
-```
-
-}
-
-Logger.log("Google Sheet 開啟成功");
-
-/* ========================================
-找照片
-======================================== */
-
-let photoResult = null;
-
-if (data.photoBase64) {
-
-```
-Logger.log("收到照片 Base64");
-
-Logger.log(
-  "Base64 長度：" +
-  String(data.photoBase64).length
-);
+                            let height =
+                                img.height;
 
 
-try {
+                            if (
+                                width >
+                                maxWidth
+                            ) {
 
-  photoResult =
-    savePhotoToDrive(
+                                height =
+                                    Math.round(
+                                        height *
+                                        maxWidth /
+                                        width
+                                    );
 
-      data.photoBase64,
+                                width =
+                                    maxWidth;
 
-      data.photoMimeType || "image/jpeg",
+                            }
 
-      date,
 
-      studentName,
+                            const canvas =
+                                document.createElement(
+                                    "canvas"
+                                );
 
-      clockInTime
 
+                            canvas.width =
+                                width;
+
+                            canvas.height =
+                                height;
+
+
+                            const ctx =
+                                canvas.getContext(
+                                    "2d"
+                                );
+
+
+                            ctx.drawImage(
+                                img,
+                                0,
+                                0,
+                                width,
+                                height
+                            );
+
+
+                            // JPEG 品質
+                            canvas.toBlob(
+                                function(blob) {
+
+                                    if (!blob) {
+
+                                        reject(
+                                            new Error(
+                                                "照片壓縮失敗"
+                                            )
+                                        );
+
+                                        return;
+
+                                    }
+
+                                    resolve(blob);
+
+                                },
+                                "image/jpeg",
+                                0.75
+                            );
+
+                        };
+
+
+                    img.onerror =
+                        function() {
+
+                            reject(
+                                new Error(
+                                    "無法讀取照片"
+                                )
+                            );
+
+                        };
+
+
+                    img.src =
+                        event.target.result;
+
+                };
+
+
+            reader.onerror =
+                function() {
+
+                    reject(
+                        new Error(
+                            "照片讀取失敗"
+                        )
+                    );
+
+                };
+
+
+            reader.readAsDataURL(file);
+
+        }
     );
 
-
-  Logger.log("照片儲存成功");
-
-  Logger.log(
-    "檔案名稱：" +
-    photoResult.fileName
-  );
-
-  Logger.log(
-    "檔案 ID：" +
-    photoResult.fileId
-  );
-
-
-} catch (photoError) {
-
-  Logger.log(
-    "❌ 照片儲存失敗：" +
-    photoError
-  );
-
-
-  throw new Error(
-    "照片上傳失敗：" +
-    photoError.message
-  );
-
-}
-```
-
-} else {
-
-```
-Logger.log("沒有收到照片");
-```
-
 }
 
-/* ========================================
-找學生當天紀錄
-======================================== */
 
-const row =
-findStudentRow(
-sheet,
-date,
-studentName
-);
+// ========================================
+// ⭐ Blob → Base64
+// ========================================
 
-if (row > 0) {
+function blobToBase64(blob) {
 
-```
-Logger.log(
-  "找到既有紀錄，第 " +
-  row +
-  " 列"
-);
+    return new Promise(
+        function(resolve, reject) {
 
+            const reader =
+                new FileReader();
 
-sheet.getRange(row, 1, 1, 4).setValues([
+            reader.onloadend =
+                function() {
 
-  [
-    date,
-    studentName,
-    workplace,
-    clockInTime
-  ]
+                    const result =
+                        reader.result;
 
-]);
-```
+                    const base64 =
+                        result.split(",")[1];
 
-} else {
+                    resolve(base64);
 
-```
-Logger.log("沒有既有紀錄，新增資料");
+                };
 
+            reader.onerror =
+                function() {
 
-sheet.appendRow([
+                    reject(
+                        new Error(
+                            "照片轉換失敗"
+                        )
+                    );
 
-  date,
-  studentName,
-  workplace,
-  clockInTime,
-  "",
-  "",
-  "",
-  ""
+                };
 
-]);
-```
+            reader.readAsDataURL(blob);
 
-}
-
-Logger.log("Clock In 寫入成功");
-
-return createJsonResponse({
-
-```
-status: "success",
-
-message: "開始工作成功",
-
-studentName: studentName,
-
-date: date,
-
-clockInTime: clockInTime,
-
-workplace: workplace,
-
-photoUploaded:
-  photoResult !== null,
-
-photoFileName:
-  photoResult
-    ? photoResult.fileName
-    : "",
-
-photoFileId:
-  photoResult
-    ? photoResult.fileId
-    : "",
-
-photoUrl:
-  photoResult
-    ? photoResult.url
-    : ""
-```
-
-});
-
-}
-
-/* ========================================
-午餐／晚餐
-======================================== */
-
-function handleLunch(data) {
-
-Logger.log("開始處理 Lunch");
-
-const studentName =
-cleanText(data.studentName);
-
-const date =
-cleanText(data.date);
-
-const mealTime =
-cleanText(data.mealTime);
-
-const food =
-cleanText(data.food);
-
-const cost =
-cleanText(data.cost);
-
-if (!studentName) {
-
-```
-throw new Error("缺少學生姓名");
-```
-
-}
-
-if (!date) {
-
-```
-throw new Error("缺少日期");
-```
-
-}
-
-if (!mealTime) {
-
-```
-throw new Error("缺少用餐時間");
-```
-
-}
-
-const spreadsheet =
-SpreadsheetApp.openById(SPREADSHEET_ID);
-
-const sheet =
-spreadsheet.getSheetByName(SHEET_NAME);
-
-if (!sheet) {
-
-```
-throw new Error(
-  "找不到工作表：「" +
-  SHEET_NAME +
-  "」"
-);
-```
-
-}
-
-const row =
-findStudentRow(
-sheet,
-date,
-studentName
-);
-
-if (row <= 0) {
-
-```
-throw new Error(
-  "找不到今天的開始工作紀錄，請先打卡開始工作"
-);
-```
-
-}
-
-sheet.getRange(row, 5, 1, 3).setValues([
-
-```
-[
-  mealTime,
-  food,
-  cost
-]
-```
-
-]);
-
-Logger.log(
-"Lunch 寫入成功，第 " +
-row +
-" 列"
-);
-
-return createJsonResponse({
-
-```
-status: "success",
-
-message: "用餐紀錄儲存成功",
-
-studentName: studentName,
-
-date: date,
-
-mealTime: mealTime,
-
-food: food,
-
-cost: cost
-```
-
-});
-
-}
-
-/* ========================================
-完成工作
-======================================== */
-
-function handleClockOut(data) {
-
-Logger.log("開始處理 Clock Out");
-
-const studentName =
-cleanText(data.studentName);
-
-const date =
-cleanText(data.date);
-
-const clockOutTime =
-cleanText(data.clockOutTime);
-
-if (!studentName) {
-
-```
-throw new Error("缺少學生姓名");
-```
-
-}
-
-if (!date) {
-
-```
-throw new Error("缺少日期");
-```
-
-}
-
-if (!clockOutTime) {
-
-```
-throw new Error("缺少完成工作時間");
-```
-
-}
-
-const spreadsheet =
-SpreadsheetApp.openById(SPREADSHEET_ID);
-
-const sheet =
-spreadsheet.getSheetByName(SHEET_NAME);
-
-if (!sheet) {
-
-```
-throw new Error(
-  "找不到工作表：「" +
-  SHEET_NAME +
-  "」"
-);
-```
-
-}
-
-const row =
-findStudentRow(
-sheet,
-date,
-studentName
-);
-
-if (row <= 0) {
-
-```
-throw new Error(
-  "找不到今天的開始工作紀錄"
-);
-```
-
-}
-
-sheet.getRange(row, 8).setValue(
-clockOutTime
-);
-
-Logger.log(
-"Clock Out 寫入成功，第 " +
-row +
-" 列"
-);
-
-return createJsonResponse({
-
-```
-status: "success",
-
-message: "完成工作成功",
-
-studentName: studentName,
-
-date: date,
-
-clockOutTime: clockOutTime
-```
-
-});
-
-}
-
-/* ========================================
-⭐ 儲存照片到 Google Drive
-======================================== */
-
-function savePhotoToDrive(
-base64Data,
-mimeType,
-date,
-studentName,
-clockInTime
-) {
-
-Logger.log("開始儲存照片");
-
-if (!base64Data) {
-
-```
-throw new Error(
-  "沒有收到照片資料"
-);
-```
-
-}
-
-/* ========================================
-移除 Data URL 前綴
-例如：
-data:image/jpeg;base64,XXXX
-======================================== */
-
-if (
-typeof base64Data === "string" &&
-base64Data.indexOf(",") !== -1
-) {
-
-```
-base64Data =
-  base64Data.split(",")[1];
-```
-
-}
-
-if (!base64Data) {
-
-```
-throw new Error(
-  "照片 Base64 資料是空的"
-);
-```
-
-}
-
-Logger.log(
-"Base64 清理完成"
-);
-
-/* ========================================
-確認 MIME Type
-======================================== */
-
-mimeType =
-mimeType || "image/jpeg";
-
-if (
-mimeType !== "image/jpeg" &&
-mimeType !== "image/jpg" &&
-mimeType !== "image/png"
-) {
-
-```
-Logger.log(
-  "未知圖片格式：" +
-  mimeType +
-  "，改用 image/jpeg"
-);
-
-mimeType = "image/jpeg";
-```
-
-}
-
-/* ========================================
-Base64 → Binary
-======================================== */
-
-let bytes;
-
-try {
-
-```
-bytes =
-  Utilities.base64Decode(base64Data);
-```
-
-} catch (decodeError) {
-
-```
-throw new Error(
-  "照片 Base64 解碼失敗：" +
-  decodeError.message
-);
-```
-
-}
-
-if (!bytes || bytes.length === 0) {
-
-```
-throw new Error(
-  "照片解碼後沒有資料"
-);
-```
-
-}
-
-Logger.log(
-"照片 Binary 大小：" +
-bytes.length +
-" bytes"
-);
-
-/* ========================================
-開啟 Drive 資料夾
-======================================== */
-
-let folder;
-
-try {
-
-```
-folder =
-  DriveApp.getFolderById(
-    PHOTO_FOLDER_ID
-  );
-```
-
-} catch (folderError) {
-
-```
-throw new Error(
-  "無法開啟 Google Drive 資料夾：" +
-  folderError.message
-);
-```
-
-}
-
-Logger.log(
-"Drive 資料夾：" +
-folder.getName()
-);
-
-/* ========================================
-建立檔案名稱
-======================================== */
-
-const safeDate =
-sanitizeFileName(date);
-
-const safeStudentName =
-sanitizeFileName(studentName);
-
-const safeTime =
-sanitizeFileName(clockInTime);
-
-const fileName =
-safeDate +
-"*" +
-safeStudentName +
-"*" +
-safeTime +
-".jpg";
-
-Logger.log(
-"照片檔名：" +
-fileName
-);
-
-/* ========================================
-建立 Blob
-不管前端原本是什麼格式，
-這裡統一以 JPG 儲存
-======================================== */
-
-const blob =
-Utilities.newBlob(
-
-```
-  bytes,
-
-  "image/jpeg",
-
-  fileName
-
-);
-```
-
-/* ========================================
-寫入 Google Drive
-======================================== */
-
-let file;
-
-try {
-
-```
-file =
-  folder.createFile(blob);
-```
-
-} catch (driveError) {
-
-```
-throw new Error(
-  "Google Drive 寫入失敗：" +
-  driveError.message
-);
-```
-
-}
-
-Logger.log(
-"========================================"
-);
-
-Logger.log(
-"✅ 照片寫入成功"
-);
-
-Logger.log(
-"檔案名稱：" +
-file.getName()
-);
-
-Logger.log(
-"檔案 ID：" +
-file.getId()
-);
-
-Logger.log(
-"========================================"
-);
-
-return {
-
-```
-fileId:
-  file.getId(),
-
-fileName:
-  file.getName(),
-
-url:
-  file.getUrl()
-```
-
-};
-
-}
-
-/* ========================================
-找學生當天紀錄
-======================================== */
-
-function findStudentRow(
-sheet,
-date,
-studentName
-) {
-
-const lastRow =
-sheet.getLastRow();
-
-if (lastRow < 2) {
-
-```
-return 0;
-```
-
-}
-
-const data =
-sheet
-.getRange(
-2,
-1,
-lastRow - 1,
-2
-)
-.getValues();
-
-const targetDate =
-normalizeDate(date);
-
-const targetStudent =
-normalizeValue(studentName);
-
-for (
-let i = 0;
-i < data.length;
-i++
-) {
-
-```
-const rowDate =
-  normalizeDate(data[i][0]);
-
-const rowStudent =
-  normalizeValue(data[i][1]);
-
-
-if (
-  rowDate === targetDate &&
-  rowStudent === targetStudent
-) {
-
-  return i + 2;
-
-}
-```
-
-}
-
-return 0;
-
-}
-
-/* ========================================
-日期標準化
-======================================== */
-
-function normalizeDate(value) {
-
-if (value instanceof Date) {
-
-```
-return Utilities.formatDate(
-  value,
-  TIMEZONE,
-  "yyyy/MM/dd"
-);
-```
-
-}
-
-if (
-value === null ||
-value === undefined
-) {
-
-```
-return "";
-```
-
-}
-
-return String(value)
-
-```
-.trim()
-
-.replace(/-/g, "/")
-
-.replace(/\s+/g, "");
-```
-
-}
-
-/* ========================================
-文字標準化
-======================================== */
-
-function normalizeValue(value) {
-
-if (
-value === null ||
-value === undefined
-) {
-
-```
-return "";
-```
-
-}
-
-return String(value)
-
-```
-.replace(/\s+/g, "")
-
-.trim();
-```
-
-}
-
-/* ========================================
-清除文字
-======================================== */
-
-function cleanText(value) {
-
-if (
-value === null ||
-value === undefined
-) {
-
-```
-return "";
-```
-
-}
-
-return String(value)
-
-```
-.trim();
-```
-
-}
-
-/* ========================================
-清理檔案名稱
-======================================== */
-
-function sanitizeFileName(value) {
-
-if (
-value === null ||
-value === undefined
-) {
-
-```
-return "";
-```
-
-}
-
-return String(value)
-
-```
-.replace(/[\\\/:*?"<>|]/g, "_")
-
-.replace(/\s+/g, "_")
-
-.trim();
-```
-
-}
-
-/* ========================================
-JSON Response
-======================================== */
-
-function createJsonResponse(data) {
-
-return ContentService
-
-```
-.createTextOutput(
-  JSON.stringify(data)
-)
-
-.setMimeType(
-  ContentService.MimeType.JSON
-);
-```
-
-}
-
-/* ========================================
-測試 Drive 資料夾
-======================================== */
-
-function testDriveFolder() {
-
-try {
-
-```
-const folder =
-  DriveApp.getFolderById(
-    PHOTO_FOLDER_ID
-  );
-
-
-Logger.log(
-  "========================================"
-);
-
-Logger.log(
-  "✅ Drive 資料夾取得成功"
-);
-
-Logger.log(
-  "資料夾名稱：" +
-  folder.getName()
-);
-
-Logger.log(
-  "資料夾 ID：" +
-  folder.getId()
-);
-
-Logger.log(
-  "========================================"
-);
-```
-
-} catch (error) {
-
-```
-Logger.log(
-  "❌ Drive 資料夾測試失敗"
-);
-
-Logger.log(error);
-```
-
-}
-
-}
-
-/* ========================================
-測試 Drive 寫入
-======================================== */
-
-function testDriveWrite() {
-
-try {
-
-```
-const folder =
-  DriveApp.getFolderById(
-    PHOTO_FOLDER_ID
-  );
-
-
-Logger.log(
-  "取得資料夾成功：" +
-  folder.getName()
-);
-
-
-const file =
-  folder.createFile(
-
-    "TAS 寫入測試",
-
-    "這是一個 TAS Google Drive 測試檔案。",
-
-    MimeType.PLAIN_TEXT
-
-  );
-
-
-Logger.log(
-  "========================================"
-);
-
-Logger.log(
-  "✅ 寫入成功！"
-);
-
-Logger.log(
-  "檔案名稱：" +
-  file.getName()
-);
-
-Logger.log(
-  "檔案 ID：" +
-  file.getId()
-);
-
-Logger.log(
-  "========================================"
-);
-```
-
-} catch (error) {
-
-```
-Logger.log(
-  "❌ Drive 寫入測試失敗"
-);
-
-Logger.log(error);
-```
-
-}
-
-}
-
-/* ========================================
-測試真正的照片儲存
-======================================== */
-
-function testPhotoSave() {
-
-try {
-
-```
-const folder =
-  DriveApp.getFolderById(
-    PHOTO_FOLDER_ID
-  );
-
-
-Logger.log(
-  "Drive 資料夾：" +
-  folder.getName()
-);
-
-
-const testText =
-  "TAS PHOTO TEST";
-
-
-const blob =
-  Utilities.newBlob(
-
-    testText,
-
-    "image/jpeg",
-
-    "TAS_Test.jpg"
-
-  );
-
-
-const file =
-  folder.createFile(blob);
-
-
-Logger.log(
-  "========================================"
-);
-
-Logger.log(
-  "✅ 測試照片檔案建立成功"
-);
-
-Logger.log(
-  "檔案名稱：" +
-  file.getName()
-);
-
-Logger.log(
-  "檔案 ID：" +
-  file.getId()
-);
-
-Logger.log(
-  "========================================"
-);
-```
-
-} catch (error) {
-
-```
-Logger.log(
-  "❌ 測試照片失敗"
-);
-
-Logger.log(error);
-```
-
-}
-
-}
-
-/* ========================================
-初始化 TAS
-======================================== */
-
-function initializeTAS() {
-
-try {
-
-```
-Logger.log(
-  "========================================"
-);
-
-Logger.log(
-  "TAS 初始化測試開始"
-);
-
-Logger.log(
-  "========================================"
-);
-
-
-/* Google Sheet */
-
-const spreadsheet =
-  SpreadsheetApp.openById(
-    SPREADSHEET_ID
-  );
-
-
-Logger.log(
-  "✅ Spreadsheet：" +
-  spreadsheet.getName()
-);
-
-
-/* 工作表 */
-
-const sheet =
-  spreadsheet.getSheetByName(
-    SHEET_NAME
-  );
-
-
-if (!sheet) {
-
-  throw new Error(
-    "找不到工作表：" +
-    SHEET_NAME
-  );
+        }
+    );
 
 }
 
 
-Logger.log(
-  "✅ 工作表：" +
-  sheet.getName()
-);
+// ========================================
+// 首頁
+// ========================================
+
+function showHome() {
+
+    currentStudent = null;
+
+    selectedWorkplace = "";
+
+    selectedPhotoFile = null;
 
 
-/* Drive */
-
-const folder =
-  DriveApp.getFolderById(
-    PHOTO_FOLDER_ID
-  );
+    const app =
+        document.getElementById(
+            "app"
+        );
 
 
-Logger.log(
-  "✅ Drive：" +
-  folder.getName()
-);
+    app.innerHTML = `
+
+        <h1>
+            TAS 打卡系統
+        </h1>
+
+        <h2>
+            Welcome! 歡迎使用！
+        </h2>
+
+        <p>
+            Please select your name！
+        </p>
+
+        <p>
+            選擇你的名字！
+        </p>
+
+        <div
+            class="student-grid"
+            id="students"
+        ></div>
+
+    `;
 
 
-Logger.log(
-  "========================================"
-);
+    const container =
+        document.getElementById(
+            "students"
+        );
 
-Logger.log(
-  "✅ TAS 初始化測試完成"
-);
 
-Logger.log(
-  "========================================"
-);
-```
+    students.forEach(
+        function(student, index) {
 
-} catch (error) {
+            const button =
+                document.createElement(
+                    "button"
+                );
 
-```
-Logger.log(
-  "❌ TAS 初始化失敗"
-);
 
-Logger.log(error);
-```
+            button.textContent =
+                `${student.icon} ${student.name}`;
+
+
+            button.addEventListener(
+                "click",
+                function() {
+
+                    showBirthdayVerification(
+                        index
+                    );
+
+                }
+            );
+
+
+            container.appendChild(
+                button
+            );
+
+        }
+    );
 
 }
 
+
+// ========================================
+// 生日驗證
+// ========================================
+
+function showBirthdayVerification(index) {
+
+    currentStudent =
+        students[index];
+
+
+    const app =
+        document.getElementById(
+            "app"
+        );
+
+
+    app.innerHTML = `
+
+        <h1>
+            Hello
+            ${escapeHTML(
+                currentStudent.name
+            )}
+            ! 👋
+        </h1>
+
+        <h2>
+            Select your birthday
+        </h2>
+
+        <p>
+            請選擇你的生日
+        </p>
+
+        <div>
+
+            <select id="month">
+                ${createMonthOptions()}
+            </select>
+
+            <select id="day">
+                ${createDayOptions()}
+            </select>
+
+        </div>
+
+        <br>
+
+        <button id="verifyButton">
+            Verify 驗證
+        </button>
+
+        <br><br>
+
+        <button id="backButton">
+            ⬅ Back 返回
+        </button>
+
+        <div
+            id="error"
+            class="error"
+        ></div>
+
+    `;
+
+
+    document
+        .getElementById(
+            "verifyButton"
+        )
+        .addEventListener(
+            "click",
+            verifyBirthday
+        );
+
+
+    document
+        .getElementById(
+            "backButton"
+        )
+        .addEventListener(
+            "click",
+            showHome
+        );
+
 }
+
+
+// ========================================
+// 月份
+// ========================================
+
+function createMonthOptions() {
+
+    let html = "";
+
+    for (
+        let i = 1;
+        i <= 12;
+        i++
+    ) {
+
+        html += `
+            <option value="${i}">
+                ${i} 月
+            </option>
+        `;
+
+    }
+
+    return html;
+
+}
+
+
+// ========================================
+// 日期
+// ========================================
+
+function createDayOptions() {
+
+    let html = "";
+
+    for (
+        let i = 1;
+        i <= 31;
+        i++
+    ) {
+
+        html += `
+            <option value="${i}">
+                ${i} 日
+            </option>
+        `;
+
+    }
+
+    return html;
+
+}
+
+
+// ========================================
+// 驗證生日
+// ========================================
+
+function verifyBirthday() {
+
+    const month =
+        Number(
+            document
+                .getElementById(
+                    "month"
+                )
+                .value
+        );
+
+
+    const day =
+        Number(
+            document
+                .getElementById(
+                    "day"
+                )
+                .value
+        );
+
+
+    const error =
+        document.getElementById(
+            "error"
+        );
+
+
+    if (
+        month ===
+            currentStudent.birthdayMonth
+        &&
+        day ===
+            currentStudent.birthdayDay
+    ) {
+
+        error.textContent =
+            "";
+
+        showMainMenu();
+
+    }
+
+    else {
+
+        error.textContent =
+            "❌ Incorrect birthday 輸入錯誤";
+
+    }
+
+}
+
+
+// ========================================
+// 主選單
+// ========================================
+
+function showMainMenu() {
+
+    selectedWorkplace = "";
+
+    selectedPhotoFile = null;
+
+
+    const app =
+        document.getElementById(
+            "app"
+        );
+
+
+    app.innerHTML = `
+
+        <h1>
+            Hello！哈囉！
+        </h1>
+
+        <h2>
+            ${escapeHTML(
+                currentStudent.name
+            )}
+            👋
+        </h2>
+
+        <p>
+            What would you like to do?
+        </p>
+
+        <p>
+            你要做什麼？
+        </p>
+
+        <div class="menu">
+
+            <button id="startWorkButton">
+                🟢 Start Work 開始工作
+            </button>
+
+            <button id="lunchButton">
+                🍱 Lunch / Dinner 午餐／晚餐
+            </button>
+
+            <button id="finishWorkButton">
+                🔴 Finish Work 打卡下班
+            </button>
+
+            <button id="feedbackButton">
+                💬 Teacher Feedback 教師評語
+            </button>
+
+            <button id="logoutButton">
+                ⬅ 回到學生選擇
+            </button>
+
+        </div>
+
+    `;
+
+
+    document
+        .getElementById(
+            "startWorkButton"
+        )
+        .addEventListener(
+            "click",
+            showStartWork
+        );
+
+
+    document
+        .getElementById(
+            "lunchButton"
+        )
+        .addEventListener(
+            "click",
+            showLunch
+        );
+
+
+    document
+        .getElementById(
+            "finishWorkButton"
+        )
+        .addEventListener(
+            "click",
+            showFinishWork
+        );
+
+
+    document
+        .getElementById(
+            "feedbackButton"
+        )
+        .addEventListener(
+            "click",
+            showFeedback
+        );
+
+
+    document
+        .getElementById(
+            "logoutButton"
+        )
+        .addEventListener(
+            "click",
+            showHome
+        );
+
+}
+
+
+// ========================================
+// Start Work
+// ========================================
+
+function showStartWork() {
+
+    selectedWorkplace = "";
+
+    selectedPhotoFile = null;
+
+
+    const app =
+        document.getElementById(
+            "app"
+        );
+
+
+    app.innerHTML = `
+
+        <h1>
+            Start Work 開始工作
+        </h1>
+
+        <h2>
+            Select your workplace
+        </h2>
+
+        <p>
+            選擇你的職場
+        </p>
+
+
+        <div class="workplace-grid">
+
+            <button id="storeButton">
+                🛒 門市
+            </button>
+
+            <button id="restaurantButton">
+                🍽 餐飲
+            </button>
+
+            <button id="hospitalButton">
+                🏥 醫院
+            </button>
+
+            <button id="cleaningButton">
+                🧹 清潔
+            </button>
+
+        </div>
+
+
+        <p id="selectedWorkplace"></p>
+
+
+        <!-- =================================
+             ⭐ 工作照片
+        ================================== -->
+
+        <div
+            style="
+                margin:25px auto;
+                max-width:500px;
+                padding:20px;
+                background:#f8fafc;
+                border-radius:18px;
+                border:2px dashed #cbd5e1;
+            "
+        >
+
+            <h3>
+                📷 工作照片
+            </h3>
+
+            <p>
+                上班打卡前必須拍照
+            </p>
+
+            <input
+                id="workPhoto"
+                type="file"
+                accept="image/*"
+                capture="environment"
+            >
+
+            <p
+                id="photoStatus"
+                style="
+                    color:#64748b;
+                    margin-top:12px;
+                "
+            >
+                尚未選擇照片
+            </p>
+
+            <img
+                id="photoPreview"
+                style="
+                    display:none;
+                    max-width:100%;
+                    max-height:300px;
+                    margin:15px auto;
+                    border-radius:12px;
+                "
+            >
+
+        </div>
+
+
+        <button
+            id="clockInButton"
+            style="display:none;"
+        >
+            🟢 Clock In 打卡上班
+        </button>
+
+
+        <br><br>
+
+
+        <button id="backMenuButton">
+            ⬅ 返回主選單
+        </button>
+
+
+        <div id="clockInMessage"></div>
+
+    `;
+
+
+    // ========================================
+    // 工作場所
+    // ========================================
+
+    document
+        .getElementById(
+            "storeButton"
+        )
+        .addEventListener(
+            "click",
+            function() {
+
+                chooseWorkplace("門市");
+
+            }
+        );
+
+
+    document
+        .getElementById(
+            "restaurantButton"
+        )
+        .addEventListener(
+            "click",
+            function() {
+
+                chooseWorkplace("餐飲");
+
+            }
+        );
+
+
+    document
+        .getElementById(
+            "hospitalButton"
+        )
+        .addEventListener(
+            "click",
+            function() {
+
+                chooseWorkplace("醫院");
+
+            }
+        );
+
+
+    document
+        .getElementById(
+            "cleaningButton"
+        )
+        .addEventListener(
+            "click",
+            function() {
+
+                chooseWorkplace("清潔");
+
+            }
+        );
+
+
+    // ========================================
+    // ⭐ 照片選擇
+    // ========================================
+
+    document
+        .getElementById(
+            "workPhoto"
+        )
+        .addEventListener(
+            "change",
+            handlePhotoSelect
+        );
+
+
+    // ========================================
+    // Clock In
+    // ========================================
+
+    document
+        .getElementById(
+            "clockInButton"
+        )
+        .addEventListener(
+            "click",
+            clockIn
+        );
+
+
+    document
+        .getElementById(
+            "backMenuButton"
+        )
+        .addEventListener(
+            "click",
+            showMainMenu
+        );
+
+}
+
+
+// ========================================
+// 選擇工作場所
+// ========================================
+
+function chooseWorkplace(workplace) {
+
+    selectedWorkplace =
+        workplace;
+
+
+    document
+        .getElementById(
+            "selectedWorkplace"
+        )
+        .textContent =
+            "Selected: " +
+            workplace;
+
+
+    updateClockInButton();
+
+}
+
+
+// ========================================
+// ⭐ 選擇照片
+// ========================================
+
+function handlePhotoSelect(event) {
+
+    const file =
+        event.target.files[0];
+
+
+    const status =
+        document.getElementById(
+            "photoStatus"
+        );
+
+
+    const preview =
+        document.getElementById(
+            "photoPreview"
+        );
+
+
+    if (!file) {
+
+        selectedPhotoFile = null;
+
+        status.textContent =
+            "尚未選擇照片";
+
+        preview.style.display =
+            "none";
+
+        updateClockInButton();
+
+        return;
+
+    }
+
+
+    // 必須是圖片
+    if (
+        !file.type.startsWith("image/")
+    ) {
+
+        selectedPhotoFile = null;
+
+        status.textContent =
+            "❌ 請選擇照片檔案";
+
+        preview.style.display =
+            "none";
+
+        updateClockInButton();
+
+        return;
+
+    }
+
+
+    selectedPhotoFile =
+        file;
+
+
+    status.innerHTML =
+        "✅ 已選擇照片：<br>" +
+        escapeHTML(file.name);
+
+
+    // 顯示預覽
+    const reader =
+        new FileReader();
+
+
+    reader.onload =
+        function(e) {
+
+            preview.src =
+                e.target.result;
+
+            preview.style.display =
+                "block";
+
+        };
+
+
+    reader.readAsDataURL(file);
+
+
+    updateClockInButton();
+
+}
+
+
+// ========================================
+// ⭐ 控制 Clock In 按鈕
+// ========================================
+
+function updateClockInButton() {
+
+    const button =
+        document.getElementById(
+            "clockInButton"
+        );
+
+
+    if (!button) {
+        return;
+    }
+
+
+    // 必須同時選擇：
+    // 1. 工作場所
+    // 2. 照片
+
+    if (
+        selectedWorkplace &&
+        selectedPhotoFile
+    ) {
+
+        button.style.display =
+            "inline-block";
+
+        button.disabled =
+            false;
+
+    }
+
+    else {
+
+        button.style.display =
+            "none";
+
+    }
+
+}
+
+
+// ========================================
+// ⭐ Clock In
+// ========================================
+
+async function clockIn() {
+
+    if (!currentStudent) {
+
+        alert(
+            "找不到學生資料"
+        );
+
+        return;
+
+    }
+
+
+    if (!selectedWorkplace) {
+
+        alert(
+            "請先選擇工作場所"
+        );
+
+        return;
+
+    }
+
+
+    // ⭐ 強制要求照片
+
+    if (!selectedPhotoFile) {
+
+        alert(
+            "📷 請先拍攝／選擇工作照片，才能打卡！"
+        );
+
+        return;
+
+    }
+
+
+    const now =
+        new Date();
+
+
+    const message =
+        document.getElementById(
+            "clockInMessage"
+        );
+
+
+    const clockButton =
+        document.getElementById(
+            "clockInButton"
+        );
+
+
+    clockButton.disabled =
+        true;
+
+
+    clockButton.textContent =
+        "⏳ 照片處理中...";
+
+
+    message.innerHTML = `
+
+        <div class="loading">
+
+            📷 正在處理工作照片...
+
+        </div>
+
+    `;
+
+
+    try {
+
+        // ====================================
+        // ⭐ 壓縮照片
+        // ====================================
+
+        const compressedBlob =
+            await compressImage(
+                selectedPhotoFile
+            );
+
+
+        message.innerHTML = `
+
+            <div class="loading">
+
+                📷 照片處理完成<br>
+                ⏳ 正在上傳打卡資料...
+
+            </div>
+
+        `;
+
+
+        // ====================================
+        // ⭐ 轉 Base64
+        // ====================================
+
+        const photoBase64 =
+    await blobToBase64(
+        compressedBlob
+    );
+
+console.log("📷 原始照片大小：", selectedPhotoFile.size);
+console.log("📷 壓縮後照片大小：", compressedBlob.size);
+console.log("📷 Base64 長度：", photoBase64.length);
+console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
+
+
+        // ====================================
+        // ⭐ 建立 Payload
+        // ====================================
+
+        const payload = {
+
+            studentName:
+                currentStudent.name,
+
+            date:
+                formatDate(now),
+
+            clockInTime:
+                formatTime(now),
+
+            workplace:
+                selectedWorkplace,
+
+            photoBase64:
+                photoBase64,
+
+            photoMimeType:
+                "image/jpeg"
+
+        };
+
+
+        // ====================================
+        // ⭐ 傳送 Google Apps Script
+        // ====================================
+
+        const response =
+            await fetch(
+                SCRIPT_URL,
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        )
+
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "HTTP " +
+                response.status
+            );
+
+        }
+
+
+        // ====================================
+        // ⭐ 讀取 Google 回傳
+        // ====================================
+
+        const result =
+            await response.json();
+
+
+        console.log(
+            "Google Apps Script 回傳：",
+            result
+        );
+
+
+        if (
+            result.status !==
+            "success"
+        ) {
+
+            throw new Error(
+                result.message ||
+                "Google Apps Script 儲存失敗"
+            );
+
+        }
+
+
+        // ====================================
+        // ⭐ 成功
+        // ====================================
+
+        message.innerHTML = `
+
+            <div class="success">
+
+                <h2>
+                    ✅ Clock-in completed!
+                </h2>
+
+                <p>
+                    打卡成功！
+                </p>
+
+                <p>
+                    Student:
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
+                </p>
+
+                <p>
+                    Workplace:
+                    ${escapeHTML(
+                        selectedWorkplace
+                    )}
+                </p>
+
+                <p>
+                    Date:
+                    ${formatDate(now)}
+                </p>
+
+                <p>
+                    Time:
+                    ${formatTime(now)}
+                </p>
+
+                <p>
+                    📷 工作照片已上傳
+                </p>
+
+                <br>
+
+                <button
+                    id="backAfterClockIn"
+                >
+                    返回主選單
+                </button>
+
+            </div>
+
+        `;
+
+
+        clockButton.style.display =
+            "none";
+
+
+        selectedPhotoFile =
+            null;
+
+
+        document
+            .getElementById(
+                "backAfterClockIn"
+            )
+            .addEventListener(
+                "click",
+                showMainMenu
+            );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Clock In Error:",
+            error
+        );
+
+
+        clockButton.disabled =
+            false;
+
+
+        clockButton.textContent =
+            "🟢 Clock In 打卡上班";
+
+
+        message.innerHTML = `
+
+            <div class="error">
+
+                <h2>
+                    ❌ 打卡失敗
+                </h2>
+
+                <p>
+                    ${escapeHTML(
+                        error.message
+                    )}
+                </p>
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+// ========================================
+// Lunch / Dinner
+// ========================================
+
+function showLunch() {
+
+    const app =
+        document.getElementById(
+            "app"
+        );
+
+
+    app.innerHTML = `
+
+        <h1>
+            Lunch / Dinner 🍱
+        </h1>
+
+        <h2>
+            午餐／晚餐
+        </h2>
+
+        <p>
+            What did you eat?
+        </p>
+
+        <p>
+            你今天吃什麼？
+        </p>
+
+        <input
+            id="food"
+            type="text"
+            placeholder="Food 食物"
+        >
+
+        <br><br>
+
+        <p>
+            How much did you spend?
+        </p>
+
+        <p>
+            你花了多少錢？
+        </p>
+
+        <input
+            id="cost"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Cost 價錢"
+        >
+
+        <br><br>
+
+        <button
+            id="saveLunchButton"
+        >
+            💾 Save 儲存
+        </button>
+
+        <br><br>
+
+        <button
+            id="backLunchButton"
+        >
+            ⬅ 返回主選單
+        </button>
+
+        <div id="lunchMessage"></div>
+
+    `;
+
+
+    document
+        .getElementById(
+            "saveLunchButton"
+        )
+        .addEventListener(
+            "click",
+            saveLunch
+        );
+
+
+    document
+        .getElementById(
+            "backLunchButton"
+        )
+        .addEventListener(
+            "click",
+            showMainMenu
+        );
+
+}
+
+
+// ========================================
+// 儲存午餐
+// ========================================
+
+async function saveLunch() {
+
+    const food =
+        document
+            .getElementById(
+                "food"
+            )
+            .value
+            .trim();
+
+
+    const cost =
+        document
+            .getElementById(
+                "cost"
+            )
+            .value
+            .trim();
+
+
+    const message =
+        document.getElementById(
+            "lunchMessage"
+        );
+
+
+    const saveButton =
+        document.getElementById(
+            "saveLunchButton"
+        );
+
+
+    if (!food) {
+
+        message.innerHTML = `
+
+            <div class="error">
+                ❌ 請輸入吃了什麼
+            </div>
+
+        `;
+
+        return;
+
+    }
+
+
+    if (!cost) {
+
+        message.innerHTML = `
+
+            <div class="error">
+                ❌ 請輸入花費金額
+            </div>
+
+        `;
+
+        return;
+
+    }
+
+
+    const now =
+        new Date();
+
+
+    const payload = {
+
+        studentName:
+            currentStudent.name,
+
+        date:
+            formatDate(now),
+
+        mealTime:
+            formatTime(now),
+
+        food:
+            food,
+
+        cost:
+            cost
+
+    };
+
+
+    saveButton.disabled =
+        true;
+
+
+    saveButton.textContent =
+        "⏳ 儲存中...";
+
+
+    message.innerHTML = `
+
+        <div class="loading">
+            正在儲存資料...
+        </div>
+
+    `;
+
+
+    try {
+
+        const response =
+            await fetch(
+                SCRIPT_URL,
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        )
+
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "HTTP " +
+                response.status
+            );
+
+        }
+
+
+        const result =
+            await response.json();
+
+
+        if (
+            result.status !==
+            "success"
+        ) {
+
+            throw new Error(
+                result.message ||
+                "儲存失敗"
+            );
+
+        }
+
+
+        message.innerHTML = `
+
+            <div class="success">
+
+                <h2>
+                    ✅ Saved!
+                </h2>
+
+                <p>
+                    午餐／晚餐紀錄成功！
+                </p>
+
+                <p>
+                    Student:
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
+                </p>
+
+                <p>
+                    Food:
+                    ${escapeHTML(
+                        food
+                    )}
+                </p>
+
+                <p>
+                    Cost:
+                    $${escapeHTML(
+                        cost
+                    )}
+                </p>
+
+                <p>
+                    Time:
+                    ${formatTime(now)}
+                </p>
+
+                <br>
+
+                <button
+                    id="backAfterLunch"
+                >
+                    返回主選單
+                </button>
+
+            </div>
+
+        `;
+
+
+        saveButton.style.display =
+            "none";
+
+
+        document
+            .getElementById(
+                "backAfterLunch"
+            )
+            .addEventListener(
+                "click",
+                showMainMenu
+            );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Lunch Error:",
+            error
+        );
+
+
+        saveButton.disabled =
+            false;
+
+
+        saveButton.textContent =
+            "💾 Save 儲存";
+
+
+        message.innerHTML = `
+
+            <div class="error">
+
+                <h2>
+                    ❌ 儲存失敗
+                </h2>
+
+                <p>
+                    ${escapeHTML(
+                        error.message
+                    )}
+                </p>
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+// ========================================
+// Finish Work
+// ========================================
+
+function showFinishWork() {
+
+    const app =
+        document.getElementById(
+            "app"
+        );
+
+
+    app.innerHTML = `
+
+        <h1>
+            Finish Work 🔴
+        </h1>
+
+        <h2>
+            打卡下班
+        </h2>
+
+        <p>
+            Ready to finish work?
+        </p>
+
+        <p>
+            準備下班了嗎？
+        </p>
+
+        <br>
+
+        <button
+            id="clockOutButton"
+        >
+            🔴 Clock Out 打卡下班
+        </button>
+
+        <br><br>
+
+        <button
+            id="backFinishButton"
+        >
+            ⬅ 返回主選單
+        </button>
+
+        <div id="clockOutMessage"></div>
+
+    `;
+
+
+    document
+        .getElementById(
+            "clockOutButton"
+        )
+        .addEventListener(
+            "click",
+            clockOut
+        );
+
+
+    document
+        .getElementById(
+            "backFinishButton"
+        )
+        .addEventListener(
+            "click",
+            showMainMenu
+        );
+
+}
+
+
+// ========================================
+// Clock Out
+// ========================================
+
+async function clockOut() {
+
+    if (!currentStudent) {
+
+        alert(
+            "找不到學生資料"
+        );
+
+        return;
+
+    }
+
+
+    const now =
+        new Date();
+
+
+    const payload = {
+
+        studentName:
+            currentStudent.name,
+
+        date:
+            formatDate(now),
+
+        clockOutTime:
+            formatTime(now)
+
+    };
+
+
+    const button =
+        document.getElementById(
+            "clockOutButton"
+        );
+
+
+    const message =
+        document.getElementById(
+            "clockOutMessage"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "⏳ 打卡中...";
+
+
+    message.innerHTML = `
+
+        <div class="loading">
+
+            正在傳送下班資料...
+
+        </div>
+
+    `;
+
+
+    try {
+
+        const response =
+            await fetch(
+                SCRIPT_URL,
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        )
+
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "HTTP " +
+                response.status
+            );
+
+        }
+
+
+        const result =
+            await response.json();
+
+
+        if (
+            result.status !==
+            "success"
+        ) {
+
+            throw new Error(
+                result.message ||
+                "打卡失敗"
+            );
+
+        }
+
+
+        message.innerHTML = `
+
+            <div class="success">
+
+                <h2>
+                    ✅ Clock-out completed!
+                </h2>
+
+                <p>
+                    下班打卡成功！
+                </p>
+
+                <p>
+                    Student:
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
+                </p>
+
+                <p>
+                    Date:
+                    ${formatDate(now)}
+                </p>
+
+                <p>
+                    Time:
+                    ${formatTime(now)}
+                </p>
+
+                <br>
+
+                <button
+                    id="backAfterClockOut"
+                >
+                    返回主選單
+                </button>
+
+            </div>
+
+        `;
+
+
+        button.style.display =
+            "none";
+
+
+        document
+            .getElementById(
+                "backAfterClockOut"
+            )
+            .addEventListener(
+                "click",
+                showMainMenu
+            );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Clock Out Error:",
+            error
+        );
+
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "🔴 Clock Out 打卡下班";
+
+
+        message.innerHTML = `
+
+            <div class="error">
+
+                <h2>
+                    ❌ 打卡失敗
+                </h2>
+
+                <p>
+                    ${escapeHTML(
+                        error.message
+                    )}
+                </p>
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+// ========================================
+// Teacher Feedback
+// ========================================
+
+function showFeedback() {
+
+    const app =
+        document.getElementById(
+            "app"
+        );
+
+
+    app.innerHTML = `
+
+        <h1>
+            Teacher Feedback 💬
+        </h1>
+
+        <h2>
+            教師評語
+        </h2>
+
+        <div
+            id="feedbackMessage"
+            class="loading"
+        >
+            ⏳ 讀取所有評語中...
+        </div>
+
+        <br>
+
+        <button
+            id="backFeedbackButton"
+        >
+            ⬅ 返回主選單
+        </button>
+
+    `;
+
+
+    document
+        .getElementById(
+            "backFeedbackButton"
+        )
+        .addEventListener(
+            "click",
+            showMainMenu
+        );
+
+
+    fetchFeedback();
+
+}
+
+
+// ========================================
+// 取得教師評語
+// ========================================
+
+async function fetchFeedback() {
+
+    const message =
+        document.getElementById(
+            "feedbackMessage"
+        );
+
+
+    try {
+
+        const url =
+            FEEDBACK_URL +
+            "?nocache=" +
+            Date.now();
+
+
+        const response =
+            await fetch(
+                url,
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "HTTP " +
+                response.status
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !Array.isArray(data)
+        ) {
+
+            throw new Error(
+                "Teacher Feedback API 回傳的不是陣列"
+            );
+
+        }
+
+
+        if (!currentStudent) {
+
+            throw new Error(
+                "目前沒有登入學生"
+            );
+
+        }
+
+
+        const targetName =
+            String(
+                currentStudent.name
+            )
+            .trim();
+
+
+        const records =
+            data
+
+                .map(
+                    function(record) {
+
+                        const studentName =
+                            String(
+                                record.studentName ||
+                                ""
+                            )
+                            .trim();
+
+
+                        const date =
+                            String(
+                                record.date ||
+                                ""
+                            )
+                            .trim();
+
+
+                        const feedback =
+                            cleanFeedbackText(
+                                record.feedback ||
+                                record.teacherFeedback ||
+                                ""
+                            );
+
+
+                        return {
+
+                            studentName:
+                                studentName,
+
+                            date:
+                                date,
+
+                            feedback:
+                                feedback
+
+                        };
+
+                    }
+                )
+
+                .filter(
+                    function(record) {
+
+                        return (
+
+                            record.studentName ===
+                            targetName
+
+                            &&
+
+                            record.feedback !== ""
+
+                        );
+
+                    }
+                );
+
+
+        if (
+            records.length === 0
+        ) {
+
+            message.className = "";
+
+
+            message.innerHTML = `
+
+                <div
+                    style="
+                        max-width:600px;
+                        margin:0 auto;
+                        padding:35px 20px;
+                        text-align:center;
+                        background:#f8fafc;
+                        border-radius:18px;
+                        border:1px solid #e2e8f0;
+                    "
+                >
+
+                    <div
+                        style="
+                            font-size:55px;
+                        "
+                    >
+                        💬
+                    </div>
+
+                    <h2>
+                        目前尚無老師評語
+                    </h2>
+
+                    <p>
+                        老師還沒有留下評語喔！
+                    </p>
+
+                </div>
+
+            `;
+
+
+            return;
+
+        }
+
+
+        records.sort(
+            function(a, b) {
+
+                const dateA =
+                    parseFeedbackDate(
+                        a.date
+                    );
+
+
+                const dateB =
+                    parseFeedbackDate(
+                        b.date
+                    );
+
+
+                return dateB - dateA;
+
+            }
+        );
+
+
+        const groupedRecords = {};
+
+
+        records.forEach(
+            function(record) {
+
+                let displayDate =
+                    record.date ||
+                    "日期未提供";
+
+
+                displayDate =
+                    String(displayDate)
+                        .trim()
+                        .replace(
+                            /\//g,
+                            "-"
+                        );
+
+
+                if (
+                    !groupedRecords[
+                        displayDate
+                    ]
+                ) {
+
+                    groupedRecords[
+                        displayDate
+                    ] = [];
+
+                }
+
+
+                groupedRecords[
+                    displayDate
+                ].push(record);
+
+            }
+        );
+
+
+        const sortedDates =
+            Object.keys(
+                groupedRecords
+            )
+            .sort(
+                function(a, b) {
+
+                    return (
+                        parseFeedbackDate(b)
+                        -
+                        parseFeedbackDate(a)
+                    );
+
+                }
+            );
+
+
+        let feedbackHTML =
+            "";
+
+
+        sortedDates.forEach(
+            function(date) {
+
+                const dateRecords =
+                    groupedRecords[
+                        date
+                    ];
+
+
+                feedbackHTML += `
+
+                    <div
+                        style="
+                            margin-bottom:30px;
+                        "
+                    >
+
+                        <div
+                            style="
+                                background:
+                                    linear-gradient(
+                                        135deg,
+                                        #2563eb,
+                                        #3b82f6
+                                    );
+                                color:white;
+                                padding:14px 20px;
+                                border-radius:14px;
+                                font-size:18px;
+                                font-weight:bold;
+                                margin-bottom:14px;
+                                box-shadow:
+                                    0 3px 10px
+                                    rgba(
+                                        37,
+                                        99,
+                                        235,
+                                        0.20
+                                    );
+                            "
+                        >
+                            📅 ${escapeHTML(date)}
+                        </div>
+
+                `;
+
+
+                dateRecords.forEach(
+                    function(record, index) {
+
+                        feedbackHTML += `
+
+                            <div
+                                style="
+                                    background:#ffffff;
+                                    padding:20px;
+                                    margin-bottom:12px;
+                                    border-radius:16px;
+                                    border:1px solid #dbeafe;
+                                    box-shadow:
+                                        0 3px 10px
+                                        rgba(
+                                            0,
+                                            0,
+                                            0,
+                                            0.07
+                                        );
+                                    text-align:left;
+                                "
+                            >
+
+                                <div
+                                    style="
+                                        color:#64748b;
+                                        font-size:13px;
+                                        margin-bottom:10px;
+                                    "
+                                >
+                                    💬 第 ${index + 1} 則評語
+                                </div>
+
+                                <div
+                                    style="
+                                        font-size:16px;
+                                        color:#1e293b;
+                                        line-height:1.7;
+                                        white-space:pre-line;
+                                        overflow-wrap:break-word;
+                                        word-break:break-word;
+                                    "
+                                >
+                                    ${escapeHTML(
+                                        record.feedback
+                                    )}
+                                </div>
+
+                            </div>
+
+                        `;
+
+                    }
+                );
+
+
+                feedbackHTML += `
+
+                    </div>
+
+                `;
+
+            }
+        );
+
+
+        message.className = "";
+
+
+        message.innerHTML = `
+
+            <div
+                style="
+                    max-width:600px;
+                    margin:0 auto;
+                "
+            >
+
+                ${feedbackHTML}
+
+            </div>
+
+        `;
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Fetch Feedback Error:",
+            error
+        );
+
+
+        message.className =
+            "error";
+
+
+        message.innerHTML = `
+
+            <h2>
+                ❌ 讀取評語失敗
+            </h2>
+
+            <p>
+                ${escapeHTML(
+                    error.message
+                )}
+            </p>
+
+        `;
+
+    }
+
+}
+
+
+// ========================================
+// 初始化
+// ========================================
+
+document.addEventListener(
+    "DOMContentLoaded",
+    showHome
+);
