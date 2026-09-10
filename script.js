@@ -1,41 +1,44 @@
-// ========================================
+// ============================================================
 // TAS 打卡系統
-// VS Code 完整版
+// JavaScript Version
 //
 // 功能：
-// 1. 學生登入
+// 1. 學生選擇
 // 2. 生日驗證
-// 3. Start Work / Clock In
-// 4. 工作照片上傳
-// 5. Lunch / Dinner
-// 6. Finish Work / Clock Out
-// 7. Teacher Feedback
-//
-// 注意：
-// TAS 打卡 GAS 與 Teacher Feedback GAS
-// 是兩套完全獨立的 Google Apps Script
-// ========================================
+// 3. 主選單
+// 4. 開始工作 / Clock In
+// 5. 選擇工作場所
+// 6. 午餐 / 晚餐紀錄
+// 7. 下班 / Clock Out
+// 8. 教師評語
+// 9. Google Apps Script POST
+// 10. Google Apps Script GET
+// ============================================================
 
 
-// ========================================
-// ① TAS Google Apps Script
-// ========================================
+// ============================================================
+// 1. Google Apps Script URL
+// ============================================================
 
-const SCRIPT_URL =
+// ------------------------------------------------------------
+// POST：寫入打卡資料
+// ------------------------------------------------------------
+
+const POST_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyCM5fWJvQZkEmA2Jqt85p_tGf0n4ZkfrPS8Uw6dPTAMNcdACRf2YMmpw1QXY2_wUFQ/exec";
 
 
-// ========================================
-// ② Teacher Feedback Google Apps Script
-// ========================================
+// ------------------------------------------------------------
+// GET：讀取教師評語
+// ------------------------------------------------------------
 
-const FEEDBACK_URL =
+const GET_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyMYhHKfukCsebFG0JkDPh-0KjUTJDkQIwjSTBIgEonihoEeSqzM_L8UB2BNGY1Jfh6/exec";
 
 
-// ========================================
-// 學生資料
-// ========================================
+// ============================================================
+// 2. 學生資料
+// ============================================================
 
 const students = [
 
@@ -133,28 +136,85 @@ const students = [
 ];
 
 
-// ========================================
-// 系統狀態
-// ========================================
+// ============================================================
+// 3. 全域狀態
+// ============================================================
 
 let currentStudent = null;
 
-let selectedWorkplace = "";
+let currentWorkplace = "";
 
-let selectedPhotoFile = null;
+let currentClockInTime = null;
+
+let currentClockOutTime = null;
 
 
-// ========================================
-// HTML 安全處理
-// ========================================
+// ============================================================
+// 4. 初始化
+// ============================================================
 
-function escapeHTML(str) {
+document.addEventListener("DOMContentLoaded", function () {
 
-    if (!str) {
+    console.log("========================================");
+    console.log("TAS 打卡系統啟動");
+    console.log("========================================");
+
+    showStudentPage();
+
+});
+
+
+// ============================================================
+// 5. 日期與時間
+// ============================================================
+
+function formattedDate(date) {
+
+    const year = date.getFullYear();
+
+    const month = String(
+        date.getMonth() + 1
+    ).padStart(2, "0");
+
+    const day = String(
+        date.getDate()
+    ).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+
+}
+
+
+function formattedTime(date) {
+
+    const hours = String(
+        date.getHours()
+    ).padStart(2, "0");
+
+    const minutes = String(
+        date.getMinutes()
+    ).padStart(2, "0");
+
+    const seconds = String(
+        date.getSeconds()
+    ).padStart(2, "0");
+
+    return `${hours}:${minutes}:${seconds}`;
+
+}
+
+
+// ============================================================
+// 6. 安全 HTML
+// ============================================================
+
+function escapeHTML(text) {
+
+    if (text === null || text === undefined) {
         return "";
     }
 
-    return String(str)
+    return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -164,757 +224,269 @@ function escapeHTML(str) {
 }
 
 
-// ========================================
-// 清除教師評語文字
-// ========================================
-
-function cleanFeedbackText(text) {
-
-    if (!text) {
-        return "";
-    }
-
-    return String(text)
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n")
-        .replace(/^[ \t]+/gm, "")
-        .replace(/[ \t]+$/gm, "")
-        .replace(/^\n+/, "")
-        .replace(/\n+$/, "")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-
-}
-
-
-// ========================================
-// 日期格式
-// YYYY-MM-DD
-// ========================================
-
-function formatDate(date) {
-
-    const y =
-        date.getFullYear();
-
-    const m =
-        String(
-            date.getMonth() + 1
-        ).padStart(2, "0");
-
-    const d =
-        String(
-            date.getDate()
-        ).padStart(2, "0");
-
-    return `${y}-${m}-${d}`;
-
-}
-
-
-// ========================================
-// 時間格式
-// HH:MM:SS
-// ========================================
-
-function formatTime(date) {
-
-    const h =
-        String(
-            date.getHours()
-        ).padStart(2, "0");
-
-    const m =
-        String(
-            date.getMinutes()
-        ).padStart(2, "0");
-
-    const s =
-        String(
-            date.getSeconds()
-        ).padStart(2, "0");
-
-    return `${h}:${m}:${s}`;
-
-}
-
-
-// ========================================
-// 教師評語日期解析
-// ========================================
-
-function parseFeedbackDate(dateValue) {
-
-    if (
-        dateValue === null ||
-        dateValue === undefined ||
-        dateValue === ""
-    ) {
-
-        return 0;
-
-    }
-
-
-    let value =
-        String(dateValue).trim();
-
-
-    value =
-        value.replace(/\//g, "-");
-
-
-    const match =
-        value.match(
-            /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
-        );
-
-
-    if (match) {
-
-        const year =
-            Number(match[1]);
-
-        const month =
-            Number(match[2]);
-
-        const day =
-            Number(match[3]);
-
-        const hour =
-            Number(match[4] || 0);
-
-        const minute =
-            Number(match[5] || 0);
-
-        const second =
-            Number(match[6] || 0);
-
-
-        return new Date(
-            year,
-            month - 1,
-            day,
-            hour,
-            minute,
-            second
-        ).getTime();
-
-    }
-
-
-    const parsed =
-        new Date(value);
-
-
-    if (
-        !isNaN(
-            parsed.getTime()
-        )
-    ) {
-
-        return parsed.getTime();
-
-    }
-
-
-    return 0;
-
-}
-
-
-// ========================================
-// ⭐ 圖片壓縮
-// ========================================
-
-function compressImage(file) {
-
-    return new Promise(
-        function(resolve, reject) {
-
-            const reader =
-                new FileReader();
-
-
-            reader.onload =
-                function(event) {
-
-                    const img =
-                        new Image();
-
-
-                    img.onload =
-                        function() {
-
-                            const maxWidth =
-                                1600;
-
-
-                            let width =
-                                img.width;
-
-                            let height =
-                                img.height;
-
-
-                            if (
-                                width >
-                                maxWidth
-                            ) {
-
-                                height =
-                                    Math.round(
-                                        height *
-                                        maxWidth /
-                                        width
-                                    );
-
-                                width =
-                                    maxWidth;
-
-                            }
-
-
-                            const canvas =
-                                document.createElement(
-                                    "canvas"
-                                );
-
-
-                            canvas.width =
-                                width;
-
-                            canvas.height =
-                                height;
-
-
-                            const ctx =
-                                canvas.getContext(
-                                    "2d"
-                                );
-
-
-                            ctx.drawImage(
-                                img,
-                                0,
-                                0,
-                                width,
-                                height
-                            );
-
-
-                            canvas.toBlob(
-                                function(blob) {
-
-                                    if (!blob) {
-
-                                        reject(
-                                            new Error(
-                                                "照片壓縮失敗"
-                                            )
-                                        );
-
-                                        return;
-
-                                    }
-
-
-                                    resolve(blob);
-
-                                },
-                                "image/jpeg",
-                                0.75
-                            );
-
-                        };
-
-
-                    img.onerror =
-                        function() {
-
-                            reject(
-                                new Error(
-                                    "無法讀取照片"
-                                )
-                            );
-
-                        };
-
-
-                    img.src =
-                        event.target.result;
-
-                };
-
-
-            reader.onerror =
-                function() {
-
-                    reject(
-                        new Error(
-                            "照片讀取失敗"
-                        )
-                    );
-
-                };
-
-
-            reader.readAsDataURL(file);
-
-        }
-    );
-
-}
-
-
-// ========================================
-// Blob → Base64
-// ========================================
-
-function blobToBase64(blob) {
-
-    return new Promise(
-        function(resolve, reject) {
-
-            const reader =
-                new FileReader();
-
-
-            reader.onloadend =
-                function() {
-
-                    try {
-
-                        const result =
-                            reader.result;
-
-                        const base64 =
-                            result.split(",")[1];
-
-                        resolve(base64);
-
-                    }
-                    catch (error) {
-
-                        reject(
-                            new Error(
-                                "照片轉換失敗"
-                            )
-                        );
-
-                    }
-
-                };
-
-
-            reader.onerror =
-                function() {
-
-                    reject(
-                        new Error(
-                            "照片轉換失敗"
-                        )
-                    );
-
-                };
-
-
-            reader.readAsDataURL(blob);
-
-        }
-    );
-
-}
-
-
-// ========================================
-// ⭐ TAS GAS POST 共用函式
-//
-// 只有 TAS 打卡系統會使用這個函式
-//
-// Teacher Feedback 不使用這個函式
-// ========================================
-
-async function postToTAS(payload) {
-
-    const response =
-        await fetch(
-            SCRIPT_URL,
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "text/plain;charset=utf-8"
-                },
-
-                body:
-                    JSON.stringify(payload)
-            }
-        );
-
-
-    if (!response.ok) {
-
-        throw new Error(
-            "HTTP " +
-            response.status
-        );
-
-    }
-
-
-    // 先用 text 取得回傳內容
-    // 避免 GAS 回傳格式稍有差異時
-    // response.json() 直接失敗
-
-    const text =
-        await response.text();
-
-
-    console.log(
-        "TAS GAS 原始回傳：",
-        text
-    );
-
-
-    let result;
-
-
-    try {
-
-        result =
-            JSON.parse(text);
-
-    }
-    catch (error) {
-
-        throw new Error(
-            "TAS GAS 回傳的不是有效 JSON：" +
-            text
-        );
-
-    }
-
-
-    console.log(
-        "TAS GAS JSON 回傳：",
-        result
-    );
-
-
-    // 接受兩種成功格式：
-    //
-    // { "status": "success" }
-    //
-    // 或
-    //
-    // { "success": true }
-
-    const isSuccess =
-        result &&
-        (
-            result.status === "success" ||
-            result.success === true
-        );
-
-
-    if (!isSuccess) {
-
-        throw new Error(
-            result.message ||
-            result.error ||
-            "TAS GAS 儲存失敗"
-        );
-
-    }
-
-
-    return result;
-
-}
-
-
-// ========================================
-// 首頁
-// ========================================
-
-function showHome() {
+// ============================================================
+// 7. 顯示學生選擇頁
+// ============================================================
+
+function showStudentPage() {
 
     currentStudent = null;
 
-    selectedWorkplace = "";
+    currentWorkplace = "";
 
-    selectedPhotoFile = null;
+    currentClockInTime = null;
 
+    currentClockOutTime = null;
 
-    const app =
-        document.getElementById(
-            "app"
-        );
-
+    const app = document.getElementById("app");
 
     app.innerHTML = `
 
-        <h1>
-            TAS 打卡系統
-        </h1>
+        <img
+            src="students.png"
+            alt="Students"
+            style="
+                width: 350px;
+                height: 200px;
+                object-fit: cover;
+                border-radius: 20px;
+                margin-bottom: 20px;
+            "
+            onerror="this.style.display='none';"
+        >
 
-        <h2>
-            Welcome! 歡迎使用！
-        </h2>
+        <h1>TAS 打卡系統</h1>
+
+        <h2>Welcome! 歡迎使用！</h2>
 
         <p>
-            Please select your name！
-        </p>
-
-        <p>
+            Please select your name！<br>
             選擇你的名字！
         </p>
 
-        <div
-            class="student-grid"
-            id="students"
-        ></div>
+        <div class="student-grid">
+
+            ${students.map(function (student, index) {
+
+                return `
+
+                    <button
+                        type="button"
+                        onclick="selectStudent(${index})"
+                    >
+                        ${student.icon}
+                        ${escapeHTML(student.name)}
+                    </button>
+
+                `;
+
+            }).join("")}
+
+        </div>
 
     `;
-
-
-    const container =
-        document.getElementById(
-            "students"
-        );
-
-
-    students.forEach(
-        function(student, index) {
-
-            const button =
-                document.createElement(
-                    "button"
-                );
-
-
-            button.textContent =
-                `${student.icon} ${student.name}`;
-
-
-            button.addEventListener(
-                "click",
-                function() {
-
-                    showBirthdayVerification(
-                        index
-                    );
-
-                }
-            );
-
-
-            container.appendChild(
-                button
-            );
-
-        }
-    );
 
 }
 
 
-// ========================================
-// 生日驗證頁面
-// ========================================
+// ============================================================
+// 8. 選擇學生
+// ============================================================
 
-function showBirthdayVerification(index) {
+function selectStudent(index) {
 
-    currentStudent =
-        students[index];
+    const student = students[index];
+
+    if (!student) {
+
+        console.error("找不到學生");
+
+        return;
+
+    }
+
+    currentStudent = student;
+
+    console.log(
+        "選擇學生：",
+        currentStudent.name
+    );
+
+    showBirthdayVerification();
+
+}
 
 
-    const app =
-        document.getElementById(
-            "app"
-        );
+// ============================================================
+// 9. 生日驗證
+// ============================================================
+
+function showBirthdayVerification() {
+
+    if (!currentStudent) {
+
+        showStudentPage();
+
+        return;
+
+    }
+
+    const app = document.getElementById("app");
+
+    const monthOptions = Array.from(
+        { length: 12 },
+        function (_, index) {
+
+            const month = index + 1;
+
+            return `
+                <option value="${month}">
+                    ${month}
+                </option>
+            `;
+
+        }
+    ).join("");
+
+
+    const dayOptions = Array.from(
+        { length: 31 },
+        function (_, index) {
+
+            const day = index + 1;
+
+            return `
+                <option value="${day}">
+                    ${day}
+                </option>
+            `;
+
+        }
+    ).join("");
 
 
     app.innerHTML = `
 
         <h1>
-            Hello
-            ${escapeHTML(
-                currentStudent.name
-            )}
-            ! 👋
+            Hello ${escapeHTML(currentStudent.name)}! 👋
         </h1>
 
-        <h2>
-            Select your birthday
-        </h2>
-
         <p>
+            Select your birthday<br>
             請選擇你的生日
         </p>
 
         <div>
 
-            <select id="month">
-                ${createMonthOptions()}
+            <label>
+                <strong>Month 月</strong>
+            </label>
+
+            <br>
+
+            <select id="birthdayMonth">
+
+                ${monthOptions}
+
             </select>
 
-            <select id="day">
-                ${createDayOptions()}
+
+            <select id="birthdayDay">
+
+                ${dayOptions}
+
             </select>
 
         </div>
 
+
         <br>
 
-        <button id="verifyButton">
+
+        <button
+            type="button"
+            onclick="verifyBirthday()"
+        >
             Verify 驗證
         </button>
 
-        <br><br>
-
-        <button id="backButton">
-            ⬅ Back 返回
-        </button>
 
         <div
-            id="error"
+            id="birthdayError"
             class="error"
         ></div>
 
+
+        <br>
+
+
+        <button
+            type="button"
+            onclick="showStudentPage()"
+        >
+            ⬅ Back 返回
+        </button>
+
     `;
 
-
-    document
-        .getElementById(
-            "verifyButton"
-        )
-        .addEventListener(
-            "click",
-            verifyBirthday
-        );
-
-
-    document
-        .getElementById(
-            "backButton"
-        )
-        .addEventListener(
-            "click",
-            showHome
-        );
-
 }
 
 
-// ========================================
-// 月份
-// ========================================
-
-function createMonthOptions() {
-
-    let html = "";
-
-
-    for (
-        let i = 1;
-        i <= 12;
-        i++
-    ) {
-
-        html += `
-            <option value="${i}">
-                ${i} 月
-            </option>
-        `;
-
-    }
-
-
-    return html;
-
-}
-
-
-// ========================================
-// 日期
-// ========================================
-
-function createDayOptions() {
-
-    let html = "";
-
-
-    for (
-        let i = 1;
-        i <= 31;
-        i++
-    ) {
-
-        html += `
-            <option value="${i}">
-                ${i} 日
-            </option>
-        `;
-
-    }
-
-
-    return html;
-
-}
-
-
-// ========================================
-// 驗證生日
-// ========================================
+// ============================================================
+// 10. 驗證生日
+// ============================================================
 
 function verifyBirthday() {
 
-    const month =
-        Number(
-            document
-                .getElementById(
-                    "month"
-                )
-                .value
-        );
+    if (!currentStudent) {
+
+        showStudentPage();
+
+        return;
+
+    }
 
 
-    const day =
-        Number(
-            document
-                .getElementById(
-                    "day"
-                )
-                .value
-        );
+    const monthElement =
+        document.getElementById("birthdayMonth");
+
+    const dayElement =
+        document.getElementById("birthdayDay");
 
 
-    const error =
-        document.getElementById(
-            "error"
-        );
+    const selectedMonth =
+        Number(monthElement.value);
+
+    const selectedDay =
+        Number(dayElement.value);
 
 
     if (
-        month ===
-            currentStudent.birthdayMonth
-        &&
-        day ===
-            currentStudent.birthdayDay
+
+        selectedMonth === currentStudent.birthdayMonth &&
+
+        selectedDay === currentStudent.birthdayDay
+
     ) {
 
-        error.textContent = "";
+        console.log(
+            "✅ 生日驗證成功：",
+            currentStudent.name
+        );
 
         showMainMenu();
 
-    }
-    else {
+    } else {
 
-        error.textContent =
+        console.log(
+            "❌ 生日驗證失敗：",
+            currentStudent.name
+        );
+
+        const errorElement =
+            document.getElementById("birthdayError");
+
+        errorElement.textContent =
             "❌ Incorrect birthday 輸入錯誤";
 
     }
@@ -922,970 +494,331 @@ function verifyBirthday() {
 }
 
 
-// ========================================
-// 主選單
-// ========================================
+// ============================================================
+// 11. 主選單
+// ============================================================
 
 function showMainMenu() {
 
-    selectedWorkplace = "";
+    if (!currentStudent) {
 
-    selectedPhotoFile = null;
+        showStudentPage();
+
+        return;
+
+    }
 
 
     const app =
-        document.getElementById(
-            "app"
-        );
+        document.getElementById("app");
 
 
     app.innerHTML = `
 
         <h1>
-            Hello！哈囉！
+            Hello！哈囉！<br>
+            ${escapeHTML(currentStudent.name)}! 👋
         </h1>
 
-        <h2>
-            ${escapeHTML(
-                currentStudent.name
-            )}
-            👋
-        </h2>
-
         <p>
-            What would you like to do?
-        </p>
-
-        <p>
+            What would you like to do?<br>
             你要做什麼？
         </p>
 
+
         <div class="menu">
 
-            <button id="startWorkButton">
-                🟢 Start Work 開始工作
+
+            <!-- 開始工作 -->
+
+            <button
+                type="button"
+                onclick="showStartWork()"
+            >
+
+                🟢
+
+                <br>
+
+                Start Work
+                開始工作
+
+                <br>
+
+                <small>
+                    Clock in 打卡上班
+                </small>
+
             </button>
 
-            <button id="lunchButton">
-                🍱 Lunch / Dinner 午餐／晚餐
+
+            <!-- 午餐 / 晚餐 -->
+
+            <button
+                type="button"
+                onclick="showLunchBreak()"
+            >
+
+                🍱
+
+                <br>
+
+                Lunch / Dinner
+                午餐 / 晚餐時間
+
+                <br>
+
+                <small>
+                    Record your meal
+                    紀錄你的花費
+                </small>
+
             </button>
 
-            <button id="finishWorkButton">
-                🔴 Finish Work 打卡下班
+
+            <!-- 下班 -->
+
+            <button
+                type="button"
+                onclick="showFinishWork()"
+            >
+
+                🔴
+
+                <br>
+
+                Finish Work
+                準備下班
+
+                <br>
+
+                <small>
+                    Clock out 打卡下班
+                </small>
+
             </button>
 
-            <button id="feedbackButton">
-                💬 Teacher Feedback 教師評語
+
+            <!-- 教師評語 -->
+
+            <button
+                type="button"
+                onclick="showFeedback()"
+            >
+
+                💬
+
+                <br>
+
+                Teacher Feedback
+                教師評語
+
+                <br>
+
+                <small>
+                    Check messages
+                    查閱教師評論
+                </small>
+
             </button>
 
-            <button id="logoutButton">
-                ⬅ 回到學生選擇
-            </button>
 
         </div>
 
+
+        <br>
+
+
+        <button
+            type="button"
+            onclick="showStudentPage()"
+        >
+            🔙 Change Student
+            更換學生
+        </button>
+
     `;
-
-
-    document
-        .getElementById(
-            "startWorkButton"
-        )
-        .addEventListener(
-            "click",
-            showStartWork
-        );
-
-
-    document
-        .getElementById(
-            "lunchButton"
-        )
-        .addEventListener(
-            "click",
-            showLunch
-        );
-
-
-    document
-        .getElementById(
-            "finishWorkButton"
-        )
-        .addEventListener(
-            "click",
-            showFinishWork
-        );
-
-
-    document
-        .getElementById(
-            "feedbackButton"
-        )
-        .addEventListener(
-            "click",
-            showFeedback
-        );
-
-
-    document
-        .getElementById(
-            "logoutButton"
-        )
-        .addEventListener(
-            "click",
-            showHome
-        );
 
 }
 
 
-// ========================================
-// Start Work
-// ========================================
+// ============================================================
+// 12. 開始工作頁面
+// ============================================================
 
 function showStartWork() {
 
-    selectedWorkplace = "";
-
-    selectedPhotoFile = null;
-
+    currentWorkplace = "";
 
     const app =
-        document.getElementById(
-            "app"
-        );
+        document.getElementById("app");
 
 
     app.innerHTML = `
 
         <h1>
-            Start Work 開始工作
+            Start Work
+            開始工作
         </h1>
 
-        <h2>
-            Select your workplace
-        </h2>
 
         <p>
+            Select your workplace
+            <br>
             選擇你的職場
         </p>
 
 
         <div class="workplace-grid">
 
-            <button id="storeButton">
+
+            <button
+                type="button"
+                onclick="selectWorkplace('門市')"
+            >
                 🛒 門市
             </button>
 
-            <button id="restaurantButton">
+
+            <button
+                type="button"
+                onclick="selectWorkplace('餐飲')"
+            >
                 🍽 餐飲
             </button>
 
-            <button id="hospitalButton">
+
+            <button
+                type="button"
+                onclick="selectWorkplace('醫院')"
+            >
                 🏥 醫院
             </button>
 
-            <button id="cleaningButton">
+
+            <button
+                type="button"
+                onclick="selectWorkplace('清潔')"
+            >
                 🧹 清潔
             </button>
 
+
         </div>
 
-
-        <p id="selectedWorkplace"></p>
-
-
-        <!-- =================================
-             工作照片
-        ================================== -->
 
         <div
-            style="
-                margin:25px auto;
-                max-width:500px;
-                padding:20px;
-                background:#f8fafc;
-                border-radius:18px;
-                border:2px dashed #cbd5e1;
-            "
-        >
+            id="selectedWorkplace"
+            style="margin-top:25px;"
+        ></div>
 
-            <h3>
-                📷 工作照片
-            </h3>
 
-            <p>
-                上班打卡前必須拍照
-            </p>
+        <div
+            id="startWorkError"
+            class="error"
+        ></div>
 
-            <input
-                id="workPhoto"
-                type="file"
-                accept="image/*"
-                capture="environment"
-            >
 
-            <p
-                id="photoStatus"
-                style="
-                    color:#64748b;
-                    margin-top:12px;
-                "
-            >
-                尚未選擇照片
-            </p>
-
-            <img
-                id="photoPreview"
-                style="
-                    display:none;
-                    max-width:100%;
-                    max-height:300px;
-                    margin:15px auto;
-                    border-radius:12px;
-                "
-            >
-
-        </div>
+        <br>
 
 
         <button
-            id="clockInButton"
-            style="display:none;"
+            type="button"
+            onclick="showMainMenu()"
         >
-            🟢 Clock In 打卡上班
+            ⬅ Back 返回
         </button>
-
-
-        <br><br>
-
-
-        <button id="backMenuButton">
-            ⬅ 返回主選單
-        </button>
-
-
-        <div id="clockInMessage"></div>
 
     `;
 
-
-    // ========================================
-    // 工作場所
-    // ========================================
-
-    document
-        .getElementById(
-            "storeButton"
-        )
-        .addEventListener(
-            "click",
-            function() {
-
-                chooseWorkplace("門市");
-
-            }
-        );
-
-
-    document
-        .getElementById(
-            "restaurantButton"
-        )
-        .addEventListener(
-            "click",
-            function() {
-
-                chooseWorkplace("餐飲");
-
-            }
-        );
-
-
-    document
-        .getElementById(
-            "hospitalButton"
-        )
-        .addEventListener(
-            "click",
-            function() {
-
-                chooseWorkplace("醫院");
-
-            }
-        );
-
-
-    document
-        .getElementById(
-            "cleaningButton"
-        )
-        .addEventListener(
-            "click",
-            function() {
-
-                chooseWorkplace("清潔");
-
-            }
-        );
-
-
-    // ========================================
-    // 工作照片
-    // ========================================
-
-    document
-        .getElementById(
-            "workPhoto"
-        )
-        .addEventListener(
-            "change",
-            handlePhotoSelect
-        );
-
-
-    // ========================================
-    // Clock In
-    // ========================================
-
-    document
-        .getElementById(
-            "clockInButton"
-        )
-        .addEventListener(
-            "click",
-            clockIn
-        );
-
-
-    document
-        .getElementById(
-            "backMenuButton"
-        )
-        .addEventListener(
-            "click",
-            showMainMenu
-        );
-
 }
 
 
-// ========================================
-// 選擇工作場所
-// ========================================
+// ============================================================
+// 13. 選擇工作場所
+// ============================================================
 
-function chooseWorkplace(workplace) {
+function selectWorkplace(workplace) {
 
-    selectedWorkplace =
-        workplace;
+    currentWorkplace = workplace;
+
+    console.log(
+        "選擇工作場所：",
+        workplace
+    );
 
 
-    document
-        .getElementById(
+    const element =
+        document.getElementById(
             "selectedWorkplace"
-        )
-        .textContent =
-            "Selected: " +
-            workplace;
+        );
 
 
-    updateClockInButton();
+    element.innerHTML = `
+
+        <p>
+
+            Selected:
+            <strong>
+                ${escapeHTML(workplace)}
+            </strong>
+
+        </p>
+
+
+        <button
+            type="button"
+            onclick="clockIn()"
+        >
+
+            🟢
+            Clock In
+            打卡上班
+
+        </button>
+
+    `;
 
 }
 
 
-// ========================================
-// 選擇照片
-// ========================================
-
-function handlePhotoSelect(event) {
-
-    const file =
-        event.target.files[0];
-
-
-    const status =
-        document.getElementById(
-            "photoStatus"
-        );
-
-
-    const preview =
-        document.getElementById(
-            "photoPreview"
-        );
-
-
-    if (!file) {
-
-        selectedPhotoFile = null;
-
-        status.textContent =
-            "尚未選擇照片";
-
-        preview.style.display =
-            "none";
-
-        updateClockInButton();
-
-        return;
-
-    }
-
-
-    if (
-        !file.type.startsWith(
-            "image/"
-        )
-    ) {
-
-        selectedPhotoFile = null;
-
-        status.textContent =
-            "❌ 請選擇照片檔案";
-
-        preview.style.display =
-            "none";
-
-        updateClockInButton();
-
-        return;
-
-    }
-
-
-    selectedPhotoFile =
-        file;
-
-
-    status.innerHTML =
-        "✅ 已選擇照片：<br>" +
-        escapeHTML(
-            file.name
-        );
-
-
-    const reader =
-        new FileReader();
-
-
-    reader.onload =
-        function(e) {
-
-            preview.src =
-                e.target.result;
-
-            preview.style.display =
-                "block";
-
-        };
-
-
-    reader.readAsDataURL(file);
-
-
-    updateClockInButton();
-
-}
-
-
-// ========================================
-// 控制 Clock In 按鈕
-// ========================================
-
-function updateClockInButton() {
-
-    const button =
-        document.getElementById(
-            "clockInButton"
-        );
-
-
-    if (!button) {
-        return;
-    }
-
-
-    if (
-        selectedWorkplace &&
-        selectedPhotoFile
-    ) {
-
-        button.style.display =
-            "inline-block";
-
-        button.disabled =
-            false;
-
-    }
-    else {
-
-        button.style.display =
-            "none";
-
-    }
-
-}
-
-
-// ========================================
-// ⭐ Clock In
-// ========================================
+// ============================================================
+// 14. 上班打卡
+// ============================================================
 
 async function clockIn() {
 
     if (!currentStudent) {
 
-        alert(
-            "找不到學生資料"
-        );
+        showStudentPage();
 
         return;
 
     }
 
 
-    if (!selectedWorkplace) {
+    if (!currentWorkplace) {
 
-        alert(
-            "請先選擇工作場所"
-        );
-
-        return;
-
-    }
-
-
-    if (!selectedPhotoFile) {
-
-        alert(
-            "📷 請先拍攝／選擇工作照片，才能打卡！"
-        );
-
-        return;
-
-    }
-
-
-    const now =
-        new Date();
-
-
-    const message =
-        document.getElementById(
-            "clockInMessage"
-        );
-
-
-    const clockButton =
-        document.getElementById(
-            "clockInButton"
-        );
-
-
-    clockButton.disabled =
-        true;
-
-
-    clockButton.textContent =
-        "⏳ 照片處理中...";
-
-
-    message.innerHTML = `
-
-        <div class="loading">
-            📷 正在處理工作照片...
-        </div>
-
-    `;
-
-
-    try {
-
-        // ====================================
-        // 壓縮照片
-        // ====================================
-
-        const compressedBlob =
-            await compressImage(
-                selectedPhotoFile
+        const errorElement =
+            document.getElementById(
+                "startWorkError"
             );
 
+        if (errorElement) {
 
-        message.innerHTML = `
+            errorElement.textContent =
+                "請先選擇工作場所";
 
-            <div class="loading">
-                📷 照片處理完成<br>
-                ⏳ 正在上傳打卡資料...
-            </div>
-
-        `;
-
-
-        // ====================================
-        // Base64
-        // ====================================
-
-        const photoBase64 =
-            await blobToBase64(
-                compressedBlob
-            );
-
-
-        // ====================================
-        // Payload
-        // ====================================
-
-        const payload = {
-
-            studentName:
-                currentStudent.name,
-
-            date:
-                formatDate(now),
-
-            clockInTime:
-                formatTime(now),
-
-            workplace:
-                selectedWorkplace,
-
-            photoBase64:
-                photoBase64,
-
-            photoMimeType:
-                "image/jpeg"
-
-        };
-
-
-        console.log(
-            "Clock In Payload：",
-            {
-                studentName:
-                    payload.studentName,
-
-                date:
-                    payload.date,
-
-                clockInTime:
-                    payload.clockInTime,
-
-                workplace:
-                    payload.workplace,
-
-                photoBase64Length:
-                    payload.photoBase64.length
-            }
-        );
-
-
-        // ====================================
-        // 傳送 TAS GAS
-        // ====================================
-
-        const result =
-            await postToTAS(
-                payload
-            );
-
-
-        console.log(
-            "Clock In GAS 回傳：",
-            result
-        );
-
-
-        // ====================================
-        // 成功
-        // ====================================
-
-        message.innerHTML = `
-
-            <div class="success">
-
-                <h2>
-                    ✅ Clock-in completed!
-                </h2>
-
-                <p>
-                    打卡成功！
-                </p>
-
-                <p>
-                    Student:
-                    ${escapeHTML(
-                        currentStudent.name
-                    )}
-                </p>
-
-                <p>
-                    Workplace:
-                    ${escapeHTML(
-                        selectedWorkplace
-                    )}
-                </p>
-
-                <p>
-                    Date:
-                    ${formatDate(now)}
-                </p>
-
-                <p>
-                    Time:
-                    ${formatTime(now)}
-                </p>
-
-                <p>
-                    📷 工作照片已上傳
-                </p>
-
-                <br>
-
-                <button
-                    id="backAfterClockIn"
-                >
-                    返回主選單
-                </button>
-
-            </div>
-
-        `;
-
-
-        clockButton.style.display =
-            "none";
-
-
-        selectedPhotoFile =
-            null;
-
-
-        document
-            .getElementById(
-                "backAfterClockIn"
-            )
-            .addEventListener(
-                "click",
-                showMainMenu
-            );
-
-    }
-    catch (error) {
-
-        console.error(
-            "Clock In Error:",
-            error
-        );
-
-
-        clockButton.disabled =
-            false;
-
-
-        clockButton.textContent =
-            "🟢 Clock In 打卡上班";
-
-
-        message.innerHTML = `
-
-            <div class="error">
-
-                <h2>
-                    ❌ 打卡失敗
-                </h2>
-
-                <p>
-                    ${escapeHTML(
-                        error.message
-                    )}
-                </p>
-
-            </div>
-
-        `;
-
-    }
-
-}
-
-
-// ========================================
-// Lunch / Dinner
-// ========================================
-
-function showLunch() {
-
-    const app =
-        document.getElementById(
-            "app"
-        );
-
-
-    app.innerHTML = `
-
-        <h1>
-            Lunch / Dinner 🍱
-        </h1>
-
-        <h2>
-            午餐／晚餐
-        </h2>
-
-        <p>
-            What did you eat?
-        </p>
-
-        <p>
-            你今天吃什麼？
-        </p>
-
-        <input
-            id="food"
-            type="text"
-            placeholder="Food 食物"
-        >
-
-        <br><br>
-
-        <p>
-            How much did you spend?
-        </p>
-
-        <p>
-            你花了多少錢？
-        </p>
-
-        <input
-            id="cost"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="Cost 價錢"
-        >
-
-        <br><br>
-
-        <button
-            id="saveLunchButton"
-        >
-            💾 Save 儲存
-        </button>
-
-        <br><br>
-
-        <button
-            id="backLunchButton"
-        >
-            ⬅ 返回主選單
-        </button>
-
-        <div id="lunchMessage"></div>
-
-    `;
-
-
-    document
-        .getElementById(
-            "saveLunchButton"
-        )
-        .addEventListener(
-            "click",
-            saveLunch
-        );
-
-
-    document
-        .getElementById(
-            "backLunchButton"
-        )
-        .addEventListener(
-            "click",
-            showMainMenu
-        );
-
-}
-
-
-// ========================================
-// 儲存午餐
-// ========================================
-
-async function saveLunch() {
-
-    if (!currentStudent) {
-
-        alert(
-            "找不到學生資料"
-        );
+        }
 
         return;
 
     }
 
 
-    const food =
-        document
-            .getElementById(
-                "food"
-            )
-            .value
-            .trim();
+    const now = new Date();
 
-
-    const cost =
-        document
-            .getElementById(
-                "cost"
-            )
-            .value
-            .trim();
-
-
-    const message =
-        document.getElementById(
-            "lunchMessage"
-        );
-
-
-    const saveButton =
-        document.getElementById(
-            "saveLunchButton"
-        );
-
-
-    if (!food) {
-
-        message.innerHTML = `
-
-            <div class="error">
-                ❌ 請輸入吃了什麼
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-
-    if (!cost) {
-
-        message.innerHTML = `
-
-            <div class="error">
-                ❌ 請輸入花費金額
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-
-    const now =
-        new Date();
+    currentClockInTime = now;
 
 
     const payload = {
@@ -1894,10 +827,284 @@ async function saveLunch() {
             currentStudent.name,
 
         date:
-            formatDate(now),
+            formattedDate(now),
+
+        clockInTime:
+            formattedTime(now),
+
+        workplace:
+            currentWorkplace
+
+    };
+
+
+    console.log(
+        "📤 Clock In payload:",
+        payload
+    );
+
+
+    showLoading(
+        "正在打卡...<br>請稍候..."
+    );
+
+
+    const result =
+        await sendDataToGoogleSheet(payload);
+
+
+    if (result.success) {
+
+        showClockInSuccess();
+
+    } else {
+
+        showErrorPage(
+            "❌ Clock In 失敗",
+            result.message,
+            function () {
+
+                showStartWork();
+
+            }
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// 15. 上班成功
+// ============================================================
+
+function showClockInSuccess() {
+
+    const app =
+        document.getElementById("app");
+
+
+    app.innerHTML = `
+
+        <div class="success">
+
+            <div
+                style="
+                    font-size:70px;
+                "
+            >
+                ✅
+            </div>
+
+
+            <h2>
+                Clock-in completed!
+            </h2>
+
+
+            <p>
+
+                <strong>
+                    Workplace:
+                </strong>
+
+                <br>
+
+                ${escapeHTML(currentWorkplace)}
+
+            </p>
+
+
+            <p>
+
+                <strong>
+                    Date:
+                </strong>
+
+                <br>
+
+                ${formattedDate(currentClockInTime)}
+
+            </p>
+
+
+            <p>
+
+                <strong>
+                    Time:
+                </strong>
+
+                <br>
+
+                ${formattedTime(currentClockInTime)}
+
+            </p>
+
+        </div>
+
+    `;
+
+
+    setTimeout(function () {
+
+        showMainMenu();
+
+    }, 3000);
+
+}
+
+
+// ============================================================
+// 16. 午餐 / 晚餐頁面
+// ============================================================
+
+function showLunchBreak() {
+
+    const app =
+        document.getElementById("app");
+
+
+    app.innerHTML = `
+
+        <h1>
+            Lunch / Dinner
+            午 / 晚餐 🍱
+        </h1>
+
+
+        <p>
+            What did you eat?
+            <br>
+            你今天的午餐 / 晚餐吃什麼？
+        </p>
+
+
+        <input
+            id="food"
+            type="text"
+            placeholder="Food 食物"
+        >
+
+
+        <p>
+            How much did you spend?
+            <br>
+            你花了多少錢？
+        </p>
+
+
+        <input
+            id="cost"
+            type="number"
+            inputmode="numeric"
+            min="0"
+            placeholder="Cost 價錢"
+        >
+
+
+        <br><br>
+
+
+        <div
+            id="mealError"
+            class="error"
+        ></div>
+
+
+        <button
+            type="button"
+            onclick="saveMeal()"
+        >
+
+            💾
+            Save 儲存
+
+        </button>
+
+
+        <br><br>
+
+
+        <button
+            type="button"
+            onclick="showMainMenu()"
+        >
+            ⬅ Back 返回
+        </button>
+
+    `;
+
+}
+
+
+// ============================================================
+// 17. 儲存午餐 / 晚餐
+// ============================================================
+
+async function saveMeal() {
+
+    if (!currentStudent) {
+
+        showStudentPage();
+
+        return;
+
+    }
+
+
+    const foodElement =
+        document.getElementById("food");
+
+
+    const costElement =
+        document.getElementById("cost");
+
+
+    const errorElement =
+        document.getElementById("mealError");
+
+
+    const food =
+        foodElement.value.trim();
+
+
+    const cost =
+        costElement.value.trim();
+
+
+    if (!food) {
+
+        errorElement.textContent =
+            "請輸入今天吃的食物";
+
+        return;
+
+    }
+
+
+    if (!cost) {
+
+        errorElement.textContent =
+            "請輸入花費";
+
+        return;
+
+    }
+
+
+    const now = new Date();
+
+
+    const payload = {
+
+        studentName:
+            currentStudent.name,
+
+        date:
+            formattedDate(now),
 
         mealTime:
-            formatTime(now),
+            formattedTime(now),
 
         food:
             food,
@@ -1908,233 +1115,204 @@ async function saveLunch() {
     };
 
 
-    saveButton.disabled =
-        true;
+    console.log(
+        "📤 Meal payload:",
+        payload
+    );
 
 
-    saveButton.textContent =
-        "⏳ 儲存中...";
+    showLoading(
+        "正在儲存餐點資料...<br>請稍候..."
+    );
 
 
-    message.innerHTML = `
+    const result =
+        await sendDataToGoogleSheet(payload);
 
-        <div class="loading">
-            正在儲存資料...
+
+    if (result.success) {
+
+        showMealSuccess(
+            food,
+            cost,
+            now
+        );
+
+    } else {
+
+        showErrorPage(
+            "❌ 儲存失敗",
+            result.message,
+            function () {
+
+                showLunchBreak();
+
+            }
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// 18. 午餐成功
+// ============================================================
+
+function showMealSuccess(
+    food,
+    cost,
+    date
+) {
+
+    const app =
+        document.getElementById("app");
+
+
+    app.innerHTML = `
+
+        <div class="success">
+
+            <div
+                style="
+                    font-size:60px;
+                "
+            >
+                ✅
+            </div>
+
+
+            <h2>
+                Saved!
+                儲存成功！
+            </h2>
+
+
+            <p>
+
+                <strong>
+                    Food 食物：
+                </strong>
+
+                <br>
+
+                ${escapeHTML(food)}
+
+            </p>
+
+
+            <p>
+
+                <strong>
+                    Cost 花費：
+                </strong>
+
+                <br>
+
+                $${escapeHTML(cost)}
+
+            </p>
+
+
+            <p>
+
+                <strong>
+                    Time 時間：
+                </strong>
+
+                <br>
+
+                ${formattedTime(date)}
+
+            </p>
+
         </div>
 
     `;
 
 
-    try {
+    setTimeout(function () {
 
-        const result =
-            await postToTAS(
-                payload
-            );
+        showMainMenu();
 
-
-        console.log(
-            "Lunch GAS 回傳：",
-            result
-        );
-
-
-        message.innerHTML = `
-
-            <div class="success">
-
-                <h2>
-                    ✅ Saved!
-                </h2>
-
-                <p>
-                    午餐／晚餐紀錄成功！
-                </p>
-
-                <p>
-                    Student:
-                    ${escapeHTML(
-                        currentStudent.name
-                    )}
-                </p>
-
-                <p>
-                    Food:
-                    ${escapeHTML(
-                        food
-                    )}
-                </p>
-
-                <p>
-                    Cost:
-                    $${escapeHTML(
-                        cost
-                    )}
-                </p>
-
-                <p>
-                    Time:
-                    ${formatTime(now)}
-                </p>
-
-                <br>
-
-                <button
-                    id="backAfterLunch"
-                >
-                    返回主選單
-                </button>
-
-            </div>
-
-        `;
-
-
-        saveButton.style.display =
-            "none";
-
-
-        document
-            .getElementById(
-                "backAfterLunch"
-            )
-            .addEventListener(
-                "click",
-                showMainMenu
-            );
-
-    }
-    catch (error) {
-
-        console.error(
-            "Lunch Error:",
-            error
-        );
-
-
-        saveButton.disabled =
-            false;
-
-
-        saveButton.textContent =
-            "💾 Save 儲存";
-
-
-        message.innerHTML = `
-
-            <div class="error">
-
-                <h2>
-                    ❌ 儲存失敗
-                </h2>
-
-                <p>
-                    ${escapeHTML(
-                        error.message
-                    )}
-                </p>
-
-            </div>
-
-        `;
-
-    }
+    }, 2500);
 
 }
 
 
-// ========================================
-// Finish Work
-// ========================================
+// ============================================================
+// 19. 下班頁面
+// ============================================================
 
 function showFinishWork() {
 
     const app =
-        document.getElementById(
-            "app"
-        );
+        document.getElementById("app");
 
 
     app.innerHTML = `
 
         <h1>
-            Finish Work 🔴
+            Finish Work
+            打卡下班
         </h1>
 
-        <h2>
-            打卡下班
-        </h2>
 
         <p>
             Ready to finish work?
+            <br>
+            準備下班？
         </p>
 
-        <p>
-            準備下班了嗎？
-        </p>
 
         <br>
 
+
         <button
-            id="clockOutButton"
+            type="button"
+            onclick="clockOut()"
         >
-            🔴 Clock Out 打卡下班
+
+            🔴
+            Clock Out
+            打卡下班
+
         </button>
+
 
         <br><br>
 
+
         <button
-            id="backFinishButton"
+            type="button"
+            onclick="showMainMenu()"
         >
-            ⬅ 返回主選單
+            ⬅ Back 返回
         </button>
 
-        <div id="clockOutMessage"></div>
-
     `;
-
-
-    document
-        .getElementById(
-            "clockOutButton"
-        )
-        .addEventListener(
-            "click",
-            clockOut
-        );
-
-
-    document
-        .getElementById(
-            "backFinishButton"
-        )
-        .addEventListener(
-            "click",
-            showMainMenu
-        );
 
 }
 
 
-// ========================================
-// Clock Out
-// ========================================
+// ============================================================
+// 20. 下班打卡
+// ============================================================
 
 async function clockOut() {
 
     if (!currentStudent) {
 
-        alert(
-            "找不到學生資料"
-        );
+        showStudentPage();
 
         return;
 
     }
 
 
-    const now =
-        new Date();
+    const now = new Date();
+
+    currentClockOutTime = now;
 
 
     const payload = {
@@ -2143,166 +1321,134 @@ async function clockOut() {
             currentStudent.name,
 
         date:
-            formatDate(now),
+            formattedDate(now),
 
         clockOutTime:
-            formatTime(now)
+            formattedTime(now)
 
     };
 
 
-    const button =
-        document.getElementById(
-            "clockOutButton"
+    console.log(
+        "📤 Clock Out payload:",
+        payload
+    );
+
+
+    showLoading(
+        "正在打卡下班...<br>請稍候..."
+    );
+
+
+    const result =
+        await sendDataToGoogleSheet(payload);
+
+
+    if (result.success) {
+
+        showClockOutSuccess();
+
+    } else {
+
+        showErrorPage(
+            "❌ Clock Out 失敗",
+            result.message,
+            function () {
+
+                showFinishWork();
+
+            }
         );
-
-
-    const message =
-        document.getElementById(
-            "clockOutMessage"
-        );
-
-
-    button.disabled =
-        true;
-
-
-    button.textContent =
-        "⏳ 打卡中...";
-
-
-    message.innerHTML = `
-
-        <div class="loading">
-            正在傳送下班資料...
-        </div>
-
-    `;
-
-
-    try {
-
-        const result =
-            await postToTAS(
-                payload
-            );
-
-
-        console.log(
-            "Clock Out GAS 回傳：",
-            result
-        );
-
-
-        message.innerHTML = `
-
-            <div class="success">
-
-                <h2>
-                    ✅ Clock-out completed!
-                </h2>
-
-                <p>
-                    下班打卡成功！
-                </p>
-
-                <p>
-                    Student:
-                    ${escapeHTML(
-                        currentStudent.name
-                    )}
-                </p>
-
-                <p>
-                    Date:
-                    ${formatDate(now)}
-                </p>
-
-                <p>
-                    Time:
-                    ${formatTime(now)}
-                </p>
-
-                <br>
-
-                <button
-                    id="backAfterClockOut"
-                >
-                    返回主選單
-                </button>
-
-            </div>
-
-        `;
-
-
-        button.style.display =
-            "none";
-
-
-        document
-            .getElementById(
-                "backAfterClockOut"
-            )
-            .addEventListener(
-                "click",
-                showMainMenu
-            );
-
-    }
-    catch (error) {
-
-        console.error(
-            "Clock Out Error:",
-            error
-        );
-
-
-        button.disabled =
-            false;
-
-
-        button.textContent =
-            "🔴 Clock Out 打卡下班";
-
-
-        message.innerHTML = `
-
-            <div class="error">
-
-                <h2>
-                    ❌ 打卡失敗
-                </h2>
-
-                <p>
-                    ${escapeHTML(
-                        error.message
-                    )}
-                </p>
-
-            </div>
-
-        `;
 
     }
 
 }
 
 
-// ========================================
-// Teacher Feedback
-//
-// ⚠️ 這裡只使用 FEEDBACK_URL
-// ⚠️ 不會使用 SCRIPT_URL
-// ⚠️ 不會寫入 TAS Sheet
-// ========================================
+// ============================================================
+// 21. 下班成功
+// ============================================================
 
-function showFeedback() {
+function showClockOutSuccess() {
 
     const app =
-        document.getElementById(
-            "app"
-        );
+        document.getElementById("app");
+
+
+    app.innerHTML = `
+
+        <div class="success">
+
+            <div
+                style="
+                    font-size:70px;
+                "
+            >
+                ✅
+            </div>
+
+
+            <h2>
+                Clock-out completed!
+            </h2>
+
+
+            <p>
+
+                <strong>
+                    Date:
+                </strong>
+
+                <br>
+
+                ${formattedDate(currentClockOutTime)}
+
+            </p>
+
+
+            <p>
+
+                <strong>
+                    Time:
+                </strong>
+
+                <br>
+
+                ${formattedTime(currentClockOutTime)}
+
+            </p>
+
+        </div>
+
+    `;
+
+
+    setTimeout(function () {
+
+        showMainMenu();
+
+    }, 3000);
+
+}
+
+
+// ============================================================
+// 22. 教師評語頁面
+// ============================================================
+
+async function showFeedback() {
+
+    if (!currentStudent) {
+
+        showStudentPage();
+
+        return;
+
+    }
+
+
+    const app =
+        document.getElementById("app");
 
 
     app.innerHTML = `
@@ -2311,101 +1457,60 @@ function showFeedback() {
             Teacher Feedback 💬
         </h1>
 
-        <h2>
-            教師評語
-        </h2>
 
         <div
-            id="feedbackMessage"
             class="loading"
         >
-            ⏳ 讀取所有評語中...
+            讀取評語中...
         </div>
-
-        <br>
-
-        <button
-            id="backFeedbackButton"
-        >
-            ⬅ 返回主選單
-        </button>
 
     `;
 
 
-    document
-        .getElementById(
-            "backFeedbackButton"
-        )
-        .addEventListener(
-            "click",
-            showMainMenu
-        );
-
-
-    fetchFeedback();
+    await fetchFeedback();
 
 }
 
 
-// ========================================
-// 取得教師評語
-//
-// Teacher Feedback GAS
-// 使用 GET
-// ========================================
+// ============================================================
+// 23. 讀取教師評語
+// ============================================================
 
 async function fetchFeedback() {
 
-    const message =
-        document.getElementById(
-            "feedbackMessage"
-        );
+    if (!currentStudent) {
+
+        showStudentPage();
+
+        return;
+
+    }
+
+
+    console.log(
+        "========================================"
+    );
+
+    console.log(
+        "🌐 開始讀取 Google Apps Script"
+    );
+
+    console.log(
+        "Student:",
+        currentStudent.name
+    );
+
+    console.log(
+        "URL:",
+        GET_SCRIPT_URL
+    );
 
 
     try {
 
-        if (!message) {
-
-            throw new Error(
-                "找不到評語顯示區域"
-            );
-
-        }
-
-
-        if (!currentStudent) {
-
-            throw new Error(
-                "目前沒有登入學生"
-            );
-
-        }
-
-
-        // ====================================
-        // 防止快取
-        // ====================================
-
-        const url =
-            FEEDBACK_URL +
-            "?nocache=" +
-            Date.now();
-
-
-        console.log(
-            "Teacher Feedback URL：",
-            url
-        );
-
-
-        // ====================================
-        // GET
-        // ====================================
-
         const response =
             await fetch(
-                url,
+                GET_SCRIPT_URL,
                 {
                     method: "GET",
                     cache: "no-store"
@@ -2413,372 +1518,636 @@ async function fetchFeedback() {
             );
 
 
+        console.log(
+            "📡 HTTP Status:",
+            response.status
+        );
+
+
         if (!response.ok) {
 
             throw new Error(
-                "HTTP " +
-                response.status
+                `伺服器回應異常：HTTP ${response.status}`
             );
 
         }
 
 
-        // ====================================
-        // 先讀文字
-        // 再 JSON.parse
-        // ====================================
-
-        const text =
-            await response.text();
+        const data =
+            await response.json();
 
 
         console.log(
-            "Teacher Feedback API 原始文字：",
-            text
-        );
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(text);
-
-        }
-        catch (error) {
-
-            throw new Error(
-                "Teacher Feedback API 回傳的不是有效 JSON"
-            );
-
-        }
-
-
-        console.log(
-            "Teacher Feedback API JSON：",
+            "📦 Google 回傳：",
             data
         );
 
-
-        // ====================================
-        // 確認陣列
-        // ====================================
 
         if (!Array.isArray(data)) {
 
             throw new Error(
-                "Teacher Feedback API 回傳的不是陣列"
+                "Google 回傳的資料不是陣列"
             );
 
         }
 
 
-        // ====================================
-        // 目前學生
-        // ====================================
+        console.log(
+            "資料筆數：",
+            data.length
+        );
+
 
         const targetName =
-            String(
-                currentStudent.name
-            ).trim();
+            currentStudent.name
+                .trim();
 
 
-        console.log(
-            "目前學生：",
-            targetName
-        );
+        let matchedRecord = null;
 
 
-        // ====================================
-        // 篩選目前學生
-        // ====================================
+        // ----------------------------------------------------
+        // 從最後一筆開始找
+        // ----------------------------------------------------
 
-        const records =
-            data
-                .map(
-                    function(record) {
-
-                        const studentName =
-                            String(
-                                record.studentName ||
-                                ""
-                            ).trim();
-
-
-                        const date =
-                            String(
-                                record.date ||
-                                ""
-                            ).trim();
-
-
-                        const feedback =
-                            cleanFeedbackText(
-                                record.feedback ||
-                                record.teacherFeedback ||
-                                ""
-                            );
-
-
-                        return {
-
-                            studentName:
-                                studentName,
-
-                            date:
-                                date,
-
-                            feedback:
-                                feedback
-
-                        };
-
-                    }
-                )
-                .filter(
-                    function(record) {
-
-                        return (
-                            record.studentName ===
-                            targetName
-                            &&
-                            record.feedback !== ""
-                        );
-
-                    }
-                );
-
-
-        console.log(
-            "找到目前學生的全部評語：",
-            records
-        );
-
-
-        // ====================================
-        // 沒有評語
-        // ====================================
-
-        if (
-            records.length === 0
+        for (
+            let i = data.length - 1;
+            i >= 0;
+            i--
         ) {
 
-            message.className = "";
+            const record =
+                data[i];
 
 
-            message.innerHTML = `
-
-                <div
-                    style="
-                        max-width:600px;
-                        margin:0 auto;
-                        padding:35px 20px;
-                        text-align:center;
-                        background:#f8fafc;
-                        border-radius:18px;
-                        border:1px solid #e2e8f0;
-                    "
-                >
-
-                    <div
-                        style="
-                            font-size:55px;
-                        "
-                    >
-                        💬
-                    </div>
-
-                    <h2>
-                        目前尚無老師評語
-                    </h2>
-
-                    <p>
-                        老師還沒有留下評語喔！
-                    </p>
-
-                </div>
-
-            `;
+            if (!record) {
+                continue;
+            }
 
 
-            return;
+            const name =
+                record.studentName
+                    ? String(
+                        record.studentName
+                    ).trim()
+                    : "";
+
+
+            const feedback =
+                record.feedback
+                    ? String(
+                        record.feedback
+                    ).trim()
+                    : "";
+
+
+            if (
+
+                name === targetName &&
+
+                feedback !== ""
+
+            ) {
+
+                matchedRecord =
+                    record;
+
+                break;
+
+            }
 
         }
 
 
-        // ====================================
-        // 最新日期在最上面
-        // ====================================
-
-        records.sort(
-            function(a, b) {
-
-                return (
-                    parseFeedbackDate(b.date) -
-                    parseFeedbackDate(a.date)
-                );
-
-            }
+        console.log(
+            "👤 學生：",
+            targetName
         );
 
 
-        // ====================================
-        // 建立評語卡片
-        // ====================================
+        if (matchedRecord) {
 
-        let feedbackHTML =
-            "";
+            console.log(
+                "💬 找到評語：",
+                matchedRecord.feedback
+            );
 
+            console.log(
+                "📅 日期：",
+                matchedRecord.date
+            );
 
-        records.forEach(
-            function(record, index) {
+        } else {
 
-                const displayDate =
-                    record.date ||
-                    "日期未提供";
+            console.log(
+                "⚠️ 找不到這位學生的評語"
+            );
 
-
-                feedbackHTML += `
-
-                    <div
-                        style="
-                            background:#ffffff;
-                            padding:20px;
-                            margin-bottom:16px;
-                            border-radius:16px;
-                            border:1px solid #dbeafe;
-                            box-shadow:
-                                0 3px 10px
-                                rgba(
-                                    0,
-                                    0,
-                                    0,
-                                    0.07
-                                );
-                            text-align:left;
-                        "
-                    >
-
-                        <!-- 評語編號 -->
-
-                        <div
-                            style="
-                                color:#64748b;
-                                font-size:13px;
-                                margin-bottom:10px;
-                            "
-                        >
-                            💬 評語 ${index + 1}
-                        </div>
+        }
 
 
-                        <!-- 日期 -->
-
-                        <div
-                            style="
-                                display:inline-block;
-                                background:#eff6ff;
-                                color:#1d4ed8;
-                                padding:6px 12px;
-                                border-radius:20px;
-                                font-size:14px;
-                                margin-bottom:12px;
-                            "
-                        >
-                            📅
-                            ${escapeHTML(
-                                displayDate
-                            )}
-                        </div>
-
-
-                        <!-- 評語內容 -->
-
-                        <div
-                            style="
-                                font-size:16px;
-                                color:#1e293b;
-                                line-height:1.6;
-                                white-space:pre-wrap;
-                                overflow-wrap:break-word;
-                                word-break:break-word;
-                            "
-                        >
-                            ${escapeHTML(
-                                record.feedback
-                            )}
-                        </div>
-
-
-                    </div>
-
-                `;
-
-            }
+        showFeedbackResult(
+            matchedRecord
         );
 
 
-        // ====================================
-        // 顯示
-        // ====================================
-
-        message.className = "";
-
-
-        message.innerHTML = `
-
-            <div
-                style="
-                    max-width:600px;
-                    margin:0 auto;
-                "
-            >
-
-                ${feedbackHTML}
-
-            </div>
-
-        `;
-
-    }
-    catch (error) {
+    } catch (error) {
 
         console.error(
-            "Fetch Feedback Error:",
+            "❌ 讀取評語失敗：",
             error
         );
 
 
-        message.className =
-            "error";
+        showErrorPage(
+            "⚠️ 讀取失敗",
+            error.message,
+            function () {
 
+                showFeedback();
 
-        message.innerHTML = `
-
-            <h2>
-                ❌ 讀取評語失敗
-            </h2>
-
-            <p>
-                ${escapeHTML(
-                    error.message
-                )}
-            </p>
-
-        `;
+            }
+        );
 
     }
 
 }
 
 
-// ========================================
-// 初始化
-// ========================================
+// ============================================================
+// 24. 顯示教師評語
+// ============================================================
+
+function showFeedbackResult(
+    record
+) {
+
+    const app =
+        document.getElementById("app");
+
+
+    let feedbackHTML = "";
+
+
+    if (
+
+        record &&
+
+        record.feedback &&
+
+        String(record.feedback).trim() !== ""
+
+    ) {
+
+        feedbackHTML = `
+
+            <div
+                style="
+                    text-align:left;
+                    white-space:pre-wrap;
+                    font-size:20px;
+                    line-height:1.8;
+                "
+            >
+
+                ${escapeHTML(
+                    String(
+                        record.feedback
+                    ).trim()
+                )}
+
+            </div>
+
+        `;
+
+    } else {
+
+        feedbackHTML = `
+
+            <p
+                style="
+                    color:#777;
+                "
+            >
+
+                目前尚無老師評語喔！
+
+            </p>
+
+        `;
+
+    }
+
+
+    const dateHTML =
+
+        record && record.date
+
+            ? `
+
+                <span
+                    style="
+                        color:#777;
+                        font-size:16px;
+                    "
+                >
+                    ${escapeHTML(
+                        String(record.date)
+                    )}
+                </span>
+
+            `
+
+            : "";
+
+
+    app.innerHTML = `
+
+        <h1>
+            Teacher Feedback 💬
+        </h1>
+
+
+        <div
+            style="
+                text-align:left;
+                background:rgba(0,0,0,0.05);
+                padding:20px;
+                border-radius:18px;
+                margin-top:20px;
+            "
+        >
+
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    gap:10px;
+                    margin-bottom:15px;
+                "
+            >
+
+                <strong
+                    style="
+                        font-size:22px;
+                    "
+                >
+                    ${escapeHTML(
+                        currentStudent.name
+                    )}
+                </strong>
+
+
+                ${dateHTML}
+
+            </div>
+
+
+            <hr>
+
+
+            ${feedbackHTML}
+
+
+        </div>
+
+
+        <br>
+
+
+        <button
+            type="button"
+            onclick="showMainMenu()"
+        >
+            ⬅ Back 返回
+        </button>
+
+    `;
+
+}
+
+
+// ============================================================
+// 25. 傳送資料到 Google Sheet
+// ============================================================
+
+async function sendDataToGoogleSheet(
+    payload
+) {
+
+    console.log(
+        "========================================"
+    );
+
+    console.log(
+        "📤 傳送資料到 Google Sheet"
+    );
+
+    console.log(
+        payload
+    );
+
+
+    try {
+
+        // ----------------------------------------------------
+        // 注意：
+        //
+        // Google Apps Script Web App 使用 POST 時，
+        // 為了避免瀏覽器 CORS preflight，
+        // 這裡使用 text/plain。
+        //
+        // Apps Script 的 doPost(e) 仍然可以從
+        // e.postData.contents 取得 JSON。
+        // ----------------------------------------------------
+
+        const response =
+            await fetch(
+                POST_SCRIPT_URL,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+                    },
+
+                    body:
+                        JSON.stringify(payload)
+                }
+            );
+
+
+        console.log(
+            "📡 HTTP Status:",
+            response.status
+        );
+
+
+        const responseText =
+            await response.text();
+
+
+        console.log(
+            "📦 Google Apps Script Response:",
+            responseText
+        );
+
+
+        if (!response.ok) {
+
+            return {
+
+                success: false,
+
+                message:
+                    `HTTP ${response.status}`
+
+            };
+
+        }
+
+
+        // ----------------------------------------------------
+        // 嘗試解析 Google 回傳 JSON
+        // ----------------------------------------------------
+
+        let responseJSON = null;
+
+
+        try {
+
+            responseJSON =
+                JSON.parse(responseText);
+
+        } catch (jsonError) {
+
+            // 有些 Apps Script 可能只回傳文字
+            responseJSON = null;
+
+        }
+
+
+        // ----------------------------------------------------
+        // 如果 Apps Script 回傳 success:false
+        // ----------------------------------------------------
+
+        if (
+
+            responseJSON &&
+
+            responseJSON.success === false
+
+        ) {
+
+            return {
+
+                success: false,
+
+                message:
+                    responseJSON.message ||
+                    "Google Apps Script 寫入失敗"
+
+            };
+
+        }
+
+
+        // ----------------------------------------------------
+        // 成功
+        // ----------------------------------------------------
+
+        return {
+
+            success: true,
+
+            message:
+                "資料成功送出"
+
+        };
+
+
+    } catch (error) {
+
+        console.error(
+            "❌ Google Sheet 傳送失敗：",
+            error
+        );
+
+
+        return {
+
+            success: false,
+
+            message:
+                error.message ||
+                "網路連線失敗"
+
+        };
+
+    }
+
+}
+
+
+// ============================================================
+// 26. Loading 畫面
+// ============================================================
+
+function showLoading(
+    message
+) {
+
+    const app =
+        document.getElementById("app");
+
+
+    app.innerHTML = `
+
+        <div class="loading">
+
+            ⏳
+
+            <br><br>
+
+            ${message}
+
+        </div>
+
+    `;
+
+}
+
+
+// ============================================================
+// 27. 錯誤頁面
+// ============================================================
+
+function showErrorPage(
+    title,
+    message,
+    retryFunction
+) {
+
+    const app =
+        document.getElementById("app");
+
+
+    app.innerHTML = `
+
+        <div
+            class="error"
+            style="
+                margin-top:40px;
+                padding:20px;
+            "
+        >
+
+            <h2>
+                ${escapeHTML(title)}
+            </h2>
+
+
+            <p
+                style="
+                    font-size:16px;
+                    color:#666;
+                    word-break:break-word;
+                "
+            >
+                ${escapeHTML(message)}
+            </p>
+
+
+            <br>
+
+
+            <button
+                type="button"
+                id="retryButton"
+            >
+                🔄 Try Again 再試一次
+            </button>
+
+
+            <br><br>
+
+
+            <button
+                type="button"
+                onclick="showMainMenu()"
+            >
+                ⬅ Back 返回
+            </button>
+
+        </div>
+
+    `;
+
+
+    const retryButton =
+        document.getElementById(
+            "retryButton"
+        );
+
+
+    if (retryButton) {
+
+        retryButton.addEventListener(
+            "click",
+            retryFunction
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// 28. 防止 Enter 送出奇怪資料
+// ============================================================
 
 document.addEventListener(
-    "DOMContentLoaded",
-    showHome
+    "keydown",
+    function (event) {
+
+        if (
+            event.key === "Enter" &&
+            event.target.tagName === "INPUT"
+        ) {
+
+            // 讓 input 可以正常輸入
+            // 不自動觸發其他功能
+
+            return;
+
+        }
+
+    }
+);
+
+
+// ============================================================
+// 29. Console 測試工具
+// ============================================================
+
+console.log(
+    "TAS JavaScript loaded successfully."
+);
+
+console.log(
+    "Students:",
+    students.length
+);
+
+console.log(
+    "POST URL:",
+    POST_SCRIPT_URL
+);
+
+console.log(
+    "GET URL:",
+    GET_SCRIPT_URL
 );
