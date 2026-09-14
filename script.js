@@ -16,7 +16,7 @@ const SCRIPT_URL =
 // ========================================
 
 const PHOTO_UPLOAD_URL =
-    "https://script.google.com/macros/s/AKfycbxTN3s7aAnisdN3Qhf1yC4IiVu5Zy86y_-7mwMlndPFppmU6OcgkKjQ-3CXHBz391bnfg/exec";
+    "https://script.google.com/macros/s/AKfycby8PNvrI67ViPBkGeeaKDe0exeXoY2Eu2CHYErNKbxaqf_z3HrFVvWP3g8oJDrlga5MwA/exec";
 // ========================================
 // Teacher Feedback Google Apps Script
 // ========================================
