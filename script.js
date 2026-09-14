@@ -1303,104 +1303,58 @@ function updateClockInButton() {
 // ⭐ Clock In
 // ========================================
 
-// ========================================
-// ⭐ Clock In
-// ========================================
-
 async function clockIn() {
 
     if (!currentStudent) {
-
-        alert(
-            "找不到學生資料"
-        );
-
+        alert("找不到學生資料");
         return;
-
     }
-
 
     if (!selectedWorkplace) {
-
-        alert(
-            "請先選擇工作場所"
-        );
-
+        alert("請先選擇工作場所");
         return;
-
     }
-
 
     if (!selectedPhotoFile) {
-
-        alert(
-            "📷 請先拍攝／選擇工作照片，才能打卡！"
-        );
-
+        alert("📷 請先拍攝／選擇工作照片，才能打卡！");
         return;
-
     }
 
-
-    const now =
-        new Date();
-
+    const now = new Date();
 
     const message =
-        document.getElementById(
-            "clockInMessage"
-        );
-
+        document.getElementById("clockInMessage");
 
     const clockButton =
-        document.getElementById(
-            "clockInButton"
-        );
+        document.getElementById("clockInButton");
 
-
-    clockButton.disabled =
-        true;
-
-
-    clockButton.textContent =
-        "⏳ 照片上傳中...";
-
+    clockButton.disabled = true;
+    clockButton.textContent = "⏳ 照片上傳中...";
 
     message.innerHTML = `
-
         <div class="loading">
-
             📷 正在準備照片...
-
         </div>
-
     `;
-
 
     try {
 
-        // ====================================
-        // ⭐ 直接使用原始照片
-        // 不壓縮
-        // 不轉 JPEG
-        // 不經過 Canvas
-        // ====================================
+        // ========================================
+        // 1. 取得原始照片
+        // ========================================
 
         const originalFile =
             selectedPhotoFile;
-
 
         console.log(
             "📷 原始檔名：",
             originalFile.name
         );
 
-
         console.log(
             "📷 原始格式：",
             originalFile.type
         );
-
 
         console.log(
             "📷 原始大小：",
@@ -1408,9 +1362,37 @@ async function clockIn() {
         );
 
 
-        // ====================================
-        // ⭐ 原始照片 → Base64
-        // ====================================
+        // ========================================
+        // 2. 建立新的照片檔名
+        //
+        // 格式：
+        // 日期_學生姓名_原始檔名
+        //
+        // 例如：
+        // 2026-09-14_王小明_IMG_1234.HEIC
+        // ========================================
+
+        const newPhotoFileName =
+            formatDate(now) +
+            "_" +
+            currentStudent.name +
+            "_" +
+            originalFile.name;
+
+
+        console.log(
+            "📷 雲端檔名：",
+            newPhotoFileName
+        );
+
+
+        // ========================================
+        // 3. 直接使用原始照片
+        //
+        // 不壓縮
+        // 不轉 JPEG
+        // 不使用 Canvas
+        // ========================================
 
         const photoBase64 =
             await blobToBase64(
@@ -1424,9 +1406,9 @@ async function clockIn() {
         );
 
 
-        // ====================================
-        // ⭐ 原本的打卡資料
-        // ====================================
+        // ========================================
+        // 4. 先儲存原本的打卡資料
+        // ========================================
 
         const payload = {
 
@@ -1441,24 +1423,13 @@ async function clockIn() {
 
             workplace:
                 selectedWorkplace
-
         };
 
 
-        // ====================================
-        // ⭐ 第一條線
-        // 原本 Google Apps Script
-        // → Google Sheet
-        // ====================================
-
         message.innerHTML = `
-
             <div class="loading">
-
                 📝 正在儲存打卡資料...
-
             </div>
-
         `;
 
 
@@ -1466,21 +1437,17 @@ async function clockIn() {
             await fetch(
                 SCRIPT_URL,
                 {
-
                     method: "POST",
 
                     headers: {
-
                         "Content-Type":
                             "text/plain;charset=utf-8"
-
                     },
 
                     body:
                         JSON.stringify(
                             payload
                         )
-
                 }
             );
 
@@ -1518,21 +1485,15 @@ async function clockIn() {
         }
 
 
-        // ====================================
-        // ⭐ 第二條線
-        // 照片專用 Google Apps Script
-        // → Google Drive
-        // ====================================
+        // ========================================
+        // 5. 上傳原始照片
+        // ========================================
 
         message.innerHTML = `
-
             <div class="loading">
-
                 📝 打卡資料已儲存<br>
                 📷 正在上傳原始照片...
-
             </div>
-
         `;
 
 
@@ -1540,14 +1501,11 @@ async function clockIn() {
             await fetch(
                 PHOTO_UPLOAD_URL,
                 {
-
                     method: "POST",
 
                     headers: {
-
                         "Content-Type":
                             "text/plain;charset=utf-8"
-
                     },
 
                     body:
@@ -1557,13 +1515,12 @@ async function clockIn() {
                                 photoBase64,
 
                             photoFileName:
-                                originalFile.name,
+                                newPhotoFileName,
 
                             photoMimeType:
                                 originalFile.type
 
                         })
-
                 }
             );
 
@@ -1578,6 +1535,10 @@ async function clockIn() {
         }
 
 
+        // ========================================
+        // 6. 讀取照片 API 回傳
+        // ========================================
+
         const photoText =
             await photoResponse.text();
 
@@ -1590,7 +1551,6 @@ async function clockIn() {
 
         let photoResult;
 
-
         try {
 
             photoResult =
@@ -1599,7 +1559,6 @@ async function clockIn() {
                 );
 
         }
-
         catch (parseError) {
 
             throw new Error(
@@ -1629,9 +1588,9 @@ async function clockIn() {
         }
 
 
-        // ====================================
-        // ⭐ 兩邊都成功
-        // ====================================
+        // ========================================
+        // 7. 顯示成功畫面
+        // ========================================
 
         message.innerHTML = `
 
@@ -1676,7 +1635,7 @@ async function clockIn() {
                 <p>
                     📄 ${escapeHTML(
                         photoResult.fileName ||
-                        originalFile.name
+                        newPhotoFileName
                     )}
                 </p>
 
@@ -1693,12 +1652,9 @@ async function clockIn() {
         `;
 
 
-        clockButton.style.display =
-            "none";
+        clockButton.style.display = "none";
 
-
-        selectedPhotoFile =
-            null;
+        selectedPhotoFile = null;
 
 
         document
@@ -1710,9 +1666,8 @@ async function clockIn() {
                 showMainMenu
             );
 
+
     }
-
-
     catch (error) {
 
         console.error(
@@ -1721,9 +1676,7 @@ async function clockIn() {
         );
 
 
-        clockButton.disabled =
-            false;
-
+        clockButton.disabled = false;
 
         clockButton.textContent =
             "🟢 Clock In 打卡上班";
