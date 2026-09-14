@@ -11,6 +11,13 @@
 const SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyCM5fWJvQZkEmA2Jqt85p_tGf0n4ZkfrPS8Uw6dPTAMNcdACRf2YMmpw1QXY2_wUFQ/exec";
 
+// ========================================
+// ⭐ 照片專用 Google Apps Script
+// ========================================
+
+const PHOTO_UPLOAD_URL =
+    "https://script.google.com/macros/s/AKfycbyfXThf03Paiuf6Tuky3MhJ7w0HtxF497HzN28_o8spXgOQwh97sbuI8aHF3Vob18nymA/exec";
+
 
 // ========================================
 // Teacher Feedback Google Apps Script
@@ -1441,26 +1448,29 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
         // ====================================
 
         const response =
-            await fetch(
-                SCRIPT_URL,
-                {
+    await fetch(
+        PHOTO_UPLOAD_URL,
+        {
 
-                    method: "POST",
+            method: "POST",
 
-                    headers: {
+            headers: {
 
-                        "Content-Type":
-                            "text/plain;charset=utf-8"
+                "Content-Type":
+                    "text/plain;charset=utf-8"
 
-                    },
+            },
 
-                    body:
-                        JSON.stringify(
-                            payload
-                        )
+            body:
+                JSON.stringify({
 
-                }
-            );
+                    photoBase64:
+                        photoBase64
+
+                })
+
+        }
+    );
 
 
         if (!response.ok) {
