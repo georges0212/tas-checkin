@@ -17,8 +17,6 @@ const SCRIPT_URL =
 
 const PHOTO_UPLOAD_URL =
     "https://script.google.com/macros/s/AKfycbyfXThf03Paiuf6Tuky3MhJ7w0HtxF497HzN28_o8spXgOQwh97sbuI8aHF3Vob18nymA/exec";
-
-
 // ========================================
 // Teacher Feedback Google Apps Script
 // ========================================
@@ -1389,12 +1387,24 @@ async function clockIn() {
             );
 
 
+        console.log(
+            "📷 原始照片大小：",
+            selectedPhotoFile.size
+        );
+
+
+        console.log(
+            "📷 壓縮後照片大小：",
+            compressedBlob.size
+        );
+
+
         message.innerHTML = `
 
             <div class="loading">
 
                 📷 照片處理完成<br>
-                ⏳ 正在上傳打卡資料...
+                ⏳ 正在準備上傳...
 
             </div>
 
@@ -1406,18 +1416,19 @@ async function clockIn() {
         // ====================================
 
         const photoBase64 =
-    await blobToBase64(
-        compressedBlob
-    );
+            await blobToBase64(
+                compressedBlob
+            );
 
-console.log("📷 原始照片大小：", selectedPhotoFile.size);
-console.log("📷 壓縮後照片大小：", compressedBlob.size);
-console.log("📷 Base64 長度：", photoBase64.length);
-console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
+
+        console.log(
+            "📷 Base64 長度：",
+            photoBase64.length
+        );
 
 
         // ====================================
-        // ⭐ 建立 Payload
+        // ⭐ 原本的打卡資料
         // ====================================
 
         const payload = {
@@ -1432,86 +1443,163 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
                 formatTime(now),
 
             workplace:
-                selectedWorkplace,
-
-            photoBase64:
-                photoBase64,
-
-            photoMimeType:
-                "image/jpeg"
+                selectedWorkplace
 
         };
 
 
         // ====================================
-        // ⭐ 傳送 Google Apps Script
+        // ⭐ 第一條線
+        // 原本 Google Apps Script
+        // → Google Sheet
         // ====================================
 
-        const response =
-    await fetch(
-        PHOTO_UPLOAD_URL,
-        {
+        message.innerHTML = `
 
-            method: "POST",
+            <div class="loading">
 
-            headers: {
+                📝 正在儲存打卡資料...
 
-                "Content-Type":
-                    "text/plain;charset=utf-8"
+            </div>
 
-            },
-
-            body:
-                JSON.stringify({
-
-                    photoBase64:
-                        photoBase64
-
-                })
-
-        }
-    );
+        `;
 
 
-        if (!response.ok) {
+        const attendanceResponse =
+            await fetch(
+                SCRIPT_URL,
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        )
+
+                }
+            );
+
+
+        if (!attendanceResponse.ok) {
 
             throw new Error(
-                "HTTP " +
-                response.status
+                "原本打卡系統 HTTP " +
+                attendanceResponse.status
             );
 
         }
 
 
-        // ====================================
-        // ⭐ 讀取 Google 回傳
-        // ====================================
-
-        const result =
-            await response.json();
+        const attendanceResult =
+            await attendanceResponse.json();
 
 
         console.log(
-            "Google Apps Script 回傳：",
-            result
+            "📝 原本打卡 API 回傳：",
+            attendanceResult
         );
 
 
         if (
-            result.status !==
+            attendanceResult.status !==
             "success"
         ) {
 
             throw new Error(
-                result.message ||
-                "Google Apps Script 儲存失敗"
+                attendanceResult.message ||
+                "原本打卡資料儲存失敗"
             );
 
         }
 
 
         // ====================================
-        // ⭐ 成功
+        // ⭐ 第二條線
+        // 照片專用 Google Apps Script
+        // → Google Drive
+        // ====================================
+
+        message.innerHTML = `
+
+            <div class="loading">
+
+                📝 打卡資料已儲存<br>
+                📷 正在上傳工作照片...
+
+            </div>
+
+        `;
+
+
+        const photoResponse =
+            await fetch(
+                PHOTO_UPLOAD_URL,
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            photoBase64:
+                                photoBase64
+
+                        })
+
+                }
+            );
+
+
+        if (!photoResponse.ok) {
+
+            throw new Error(
+                "照片上傳 HTTP " +
+                photoResponse.status
+            );
+
+        }
+
+
+        const photoResult =
+            await photoResponse.json();
+
+
+        console.log(
+            "📷 照片 API 回傳：",
+            photoResult
+        );
+
+
+        if (
+            photoResult.status !==
+            "success"
+        ) {
+
+            throw new Error(
+                photoResult.message ||
+                "照片上傳失敗"
+            );
+
+        }
+
+
+        // ====================================
+        // ⭐ 兩邊都成功
         // ====================================
 
         message.innerHTML = `
@@ -1551,16 +1639,8 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
                 </p>
 
                 <p>
-                    📷 工作照片已上傳
+                    📷 工作照片已上傳到雲端
                 </p>
-
-                <br>
-
-                <button
-                    id="backAfterClockIn"
-                >
-                    返回主選單
-                </button>
 
             </div>
 
@@ -1575,13 +1655,47 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
             null;
 
 
-        document
-            .getElementById(
-                "backAfterClockIn"
+        // ====================================
+        // ⭐ 返回主選單
+        // ====================================
+
+        const backButton =
+            document.createElement(
+                "button"
+            );
+
+
+        backButton.textContent =
+            "返回主選單";
+
+
+        backButton.style.marginTop =
+            "20px";
+
+
+        backButton.addEventListener(
+            "click",
+            showMainMenu
+        );
+
+
+        message
+            .querySelector(
+                ".success"
             )
-            .addEventListener(
-                "click",
-                showMainMenu
+            .appendChild(
+                document.createElement(
+                    "br"
+                )
+            );
+
+
+        message
+            .querySelector(
+                ".success"
+            )
+            .appendChild(
+                backButton
             );
 
     }
@@ -1623,7 +1737,6 @@ console.log("📷 Base64 前 50 字元：", photoBase64.substring(0, 50));
     }
 
 }
-
 
 // ========================================
 // Lunch / Dinner
