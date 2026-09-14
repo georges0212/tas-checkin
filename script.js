@@ -16,7 +16,7 @@ const SCRIPT_URL =
 // ========================================
 
 const PHOTO_UPLOAD_URL =
-    "https://script.google.com/macros/s/AKfycbzjz1uOqUu3y_LZkGmtghIBXeQ4ePX8tbCv7Vyfhsy2pUhwUfOWRsfb2WWmEB6C57oABg/exec";
+    "https://script.google.com/macros/s/AKfycbxTN3s7aAnisdN3Qhf1yC4IiVu5Zy86y_-7mwMlndPFppmU6OcgkKjQ-3CXHBz391bnfg/exec";
 // ========================================
 // Teacher Feedback Google Apps Script
 // ========================================
@@ -1303,6 +1303,10 @@ function updateClockInButton() {
 // ⭐ Clock In
 // ========================================
 
+// ========================================
+// ⭐ Clock In
+// ========================================
+
 async function clockIn() {
 
     if (!currentStudent) {
@@ -1326,8 +1330,6 @@ async function clockIn() {
 
     }
 
-
-    // ⭐ 強制要求照片
 
     if (!selectedPhotoFile) {
 
@@ -1361,14 +1363,14 @@ async function clockIn() {
 
 
     clockButton.textContent =
-        "⏳ 照片處理中...";
+        "⏳ 照片上傳中...";
 
 
     message.innerHTML = `
 
         <div class="loading">
 
-            📷 正在處理工作照片...
+            📷 正在準備照片...
 
         </div>
 
@@ -1378,46 +1380,41 @@ async function clockIn() {
     try {
 
         // ====================================
-        // ⭐ 壓縮照片
+        // ⭐ 直接使用原始照片
+        // 不壓縮
+        // 不轉 JPEG
+        // 不經過 Canvas
         // ====================================
 
-        const compressedBlob =
-            await compressImage(
-                selectedPhotoFile
-            );
+        const originalFile =
+            selectedPhotoFile;
 
 
         console.log(
-            "📷 原始照片大小：",
-            selectedPhotoFile.size
+            "📷 原始檔名：",
+            originalFile.name
         );
 
 
         console.log(
-            "📷 壓縮後照片大小：",
-            compressedBlob.size
+            "📷 原始格式：",
+            originalFile.type
         );
 
 
-        message.innerHTML = `
-
-            <div class="loading">
-
-                📷 照片處理完成<br>
-                ⏳ 正在準備上傳...
-
-            </div>
-
-        `;
+        console.log(
+            "📷 原始大小：",
+            originalFile.size
+        );
 
 
         // ====================================
-        // ⭐ 轉 Base64
+        // ⭐ 原始照片 → Base64
         // ====================================
 
         const photoBase64 =
             await blobToBase64(
-                compressedBlob
+                originalFile
             );
 
 
@@ -1532,7 +1529,7 @@ async function clockIn() {
             <div class="loading">
 
                 📝 打卡資料已儲存<br>
-                📷 正在上傳工作照片...
+                📷 正在上傳原始照片...
 
             </div>
 
@@ -1557,7 +1554,13 @@ async function clockIn() {
                         JSON.stringify({
 
                             photoBase64:
-                                photoBase64
+                                photoBase64,
+
+                            photoFileName:
+                                originalFile.name,
+
+                            photoMimeType:
+                                originalFile.type
 
                         })
 
@@ -1575,8 +1578,36 @@ async function clockIn() {
         }
 
 
-        const photoResult =
-            await photoResponse.json();
+        const photoText =
+            await photoResponse.text();
+
+
+        console.log(
+            "📷 照片 API 原始回傳：",
+            photoText
+        );
+
+
+        let photoResult;
+
+
+        try {
+
+            photoResult =
+                JSON.parse(
+                    photoText
+                );
+
+        }
+
+        catch (parseError) {
+
+            throw new Error(
+                "照片 API 回傳格式錯誤：" +
+                photoText
+            );
+
+        }
 
 
         console.log(
@@ -1639,8 +1670,23 @@ async function clockIn() {
                 </p>
 
                 <p>
-                    📷 工作照片已上傳到雲端
+                    📷 原始照片已上傳到雲端
                 </p>
+
+                <p>
+                    📄 ${escapeHTML(
+                        photoResult.fileName ||
+                        originalFile.name
+                    )}
+                </p>
+
+                <br>
+
+                <button
+                    id="backAfterClockIn"
+                >
+                    返回主選單
+                </button>
 
             </div>
 
@@ -1655,50 +1701,17 @@ async function clockIn() {
             null;
 
 
-        // ====================================
-        // ⭐ 返回主選單
-        // ====================================
-
-        const backButton =
-            document.createElement(
-                "button"
-            );
-
-
-        backButton.textContent =
-            "返回主選單";
-
-
-        backButton.style.marginTop =
-            "20px";
-
-
-        backButton.addEventListener(
-            "click",
-            showMainMenu
-        );
-
-
-        message
-            .querySelector(
-                ".success"
+        document
+            .getElementById(
+                "backAfterClockIn"
             )
-            .appendChild(
-                document.createElement(
-                    "br"
-                )
-            );
-
-
-        message
-            .querySelector(
-                ".success"
-            )
-            .appendChild(
-                backButton
+            .addEventListener(
+                "click",
+                showMainMenu
             );
 
     }
+
 
     catch (error) {
 
