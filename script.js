@@ -1,8 +1,6 @@
-```javascript
 // ========================================
 // TAS 打卡系統
 // VS Code 完整版
-// 一天只能 Clock In 一次
 // ========================================
 
 
@@ -11,17 +9,14 @@
 // ========================================
 
 const SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbyYNfbGy5H-W7XKlnTBWFBcKzmwX041tIUuk3j8DjFGMOR0pSG_MZG3vo4Zxs3lGADcgw/exec";
-
+    "https://script.google.com/macros/s/AKfycbyCM5fWJvQZkEmA2Jqt85p_tGf0n4ZkfrPS8Uw6dPTAMNcdACRf2YMmpw1QXY2_wUFQ/exec";
 
 // ========================================
-// 照片專用 Google Apps Script
+// ⭐ 照片專用 Google Apps Script
 // ========================================
 
 const PHOTO_UPLOAD_URL =
-    "https://script.google.com/macros/s/AKfycby8PNvrI67ViPBKGeeaKDe0exeXoY2Eu2CHYErNKbxaqf_z3HrFVvWP3g8oJDrlga5MwA/exec";
-
-
+    "https://script.google.com/macros/s/AKfycby8PNvrI67ViPBkGeeaKDe0exeXoY2Eu2CHYErNKbxaqf_z3HrFVvWP3g8oJDrlga5MwA/exec";
 // ========================================
 // Teacher Feedback Google Apps Script
 // ========================================
@@ -138,14 +133,12 @@ let currentStudent = null;
 
 let selectedWorkplace = "";
 
+
+// ========================================
+// ⭐ 工作照片
+// ========================================
+
 let selectedPhotoFile = null;
-
-
-// ========================================
-// ⭐ 今天是否已經 Clock In
-// ========================================
-
-let todayAlreadyClockedIn = false;
 
 
 // ========================================
@@ -177,13 +170,21 @@ function cleanFeedbackText(text) {
     }
 
     return String(text)
+
         .replace(/\r\n/g, "\n")
+
         .replace(/\r/g, "\n")
+
         .replace(/^[ \t]+/gm, "")
+
         .replace(/[ \t]+$/gm, "")
+
         .replace(/^\n+/, "")
+
         .replace(/\n+$/, "")
+
         .replace(/\n{3,}/g, "\n\n")
+
         .trim();
 
 }
@@ -256,10 +257,14 @@ function parseFeedbackDate(dateValue) {
     }
 
     let value =
-        String(dateValue).trim();
+        String(dateValue)
+            .trim();
 
     value =
-        value.replace(/\//g, "-");
+        value.replace(
+            /\//g,
+            "-"
+        );
 
     const match =
         value.match(
@@ -300,7 +305,11 @@ function parseFeedbackDate(dateValue) {
     const parsed =
         new Date(value);
 
-    if (!isNaN(parsed.getTime())) {
+    if (
+        !isNaN(
+            parsed.getTime()
+        )
+    ) {
 
         return parsed.getTime();
 
@@ -312,7 +321,7 @@ function parseFeedbackDate(dateValue) {
 
 
 // ========================================
-// 圖片壓縮
+// ⭐ 圖片壓縮
 // ========================================
 
 function compressImage(file) {
@@ -332,6 +341,7 @@ function compressImage(file) {
                     img.onload =
                         function() {
 
+                            // 最大寬度
                             const maxWidth = 1600;
 
                             let width =
@@ -339,6 +349,7 @@ function compressImage(file) {
 
                             let height =
                                 img.height;
+
 
                             if (
                                 width >
@@ -357,10 +368,12 @@ function compressImage(file) {
 
                             }
 
+
                             const canvas =
                                 document.createElement(
                                     "canvas"
                                 );
+
 
                             canvas.width =
                                 width;
@@ -368,10 +381,12 @@ function compressImage(file) {
                             canvas.height =
                                 height;
 
+
                             const ctx =
                                 canvas.getContext(
                                     "2d"
                                 );
+
 
                             ctx.drawImage(
                                 img,
@@ -381,6 +396,8 @@ function compressImage(file) {
                                 height
                             );
 
+
+                            // JPEG 品質
                             canvas.toBlob(
                                 function(blob) {
 
@@ -405,6 +422,7 @@ function compressImage(file) {
 
                         };
 
+
                     img.onerror =
                         function() {
 
@@ -416,10 +434,12 @@ function compressImage(file) {
 
                         };
 
+
                     img.src =
                         event.target.result;
 
                 };
+
 
             reader.onerror =
                 function() {
@@ -432,6 +452,7 @@ function compressImage(file) {
 
                 };
 
+
             reader.readAsDataURL(file);
 
         }
@@ -441,7 +462,7 @@ function compressImage(file) {
 
 
 // ========================================
-// Blob → Base64
+// ⭐ Blob → Base64
 // ========================================
 
 function blobToBase64(blob) {
@@ -485,105 +506,6 @@ function blobToBase64(blob) {
 
 
 // ========================================
-// ⭐ 檢查今天是否已經 Clock In
-// ========================================
-
-async function checkTodayClockIn() {
-
-    if (!currentStudent) {
-
-        return false;
-
-    }
-
-    const today =
-        formatDate(
-            new Date()
-        );
-
-
-    const url =
-        SCRIPT_URL +
-        "?action=checkClockIn" +
-        "&studentName=" +
-        encodeURIComponent(
-            currentStudent.name
-        ) +
-        "&date=" +
-        encodeURIComponent(
-            today
-        ) +
-        "&nocache=" +
-        Date.now();
-
-
-    try {
-
-        const response =
-            await fetch(
-                url,
-                {
-                    method: "GET",
-                    cache: "no-store"
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                "檢查打卡狀態 HTTP " +
-                response.status
-            );
-
-        }
-
-
-        const result =
-            await response.json();
-
-
-        console.log(
-            "🔍 今天打卡檢查結果：",
-            result
-        );
-
-
-        if (
-            result.status !==
-            "success"
-        ) {
-
-            throw new Error(
-                result.message ||
-                "無法取得今天的打卡狀態"
-            );
-
-        }
-
-
-        todayAlreadyClockedIn =
-            result.alreadyClockedIn === true;
-
-
-        return todayAlreadyClockedIn;
-
-    }
-    catch (error) {
-
-        console.error(
-            "Check Clock In Error:",
-            error
-        );
-
-        throw error;
-
-    }
-
-}
-
-
-// ========================================
 // 首頁
 // ========================================
 
@@ -594,8 +516,6 @@ function showHome() {
     selectedWorkplace = "";
 
     selectedPhotoFile = null;
-
-    todayAlreadyClockedIn = false;
 
 
     const app =
@@ -644,8 +564,10 @@ function showHome() {
                     "button"
                 );
 
+
             button.textContent =
                 `${student.icon} ${student.name}`;
+
 
             button.addEventListener(
                 "click",
@@ -657,6 +579,7 @@ function showHome() {
 
                 }
             );
+
 
             container.appendChild(
                 button
@@ -676,9 +599,6 @@ function showBirthdayVerification(index) {
 
     currentStudent =
         students[index];
-
-
-    todayAlreadyClockedIn = false;
 
 
     const app =
@@ -988,215 +908,10 @@ function showMainMenu() {
 
 
 // ========================================
-// ⭐ Start Work
-// 進入前先檢查今天是否已經打卡
+// Start Work
 // ========================================
 
-async function showStartWork() {
-
-    selectedWorkplace = "";
-
-    selectedPhotoFile = null;
-
-
-    const app =
-        document.getElementById(
-            "app"
-        );
-
-
-    // ========================================
-    // 先顯示檢查畫面
-    // ========================================
-
-    app.innerHTML = `
-
-        <h1>
-            Start Work 開始工作
-        </h1>
-
-        <div
-            class="loading"
-            style="
-                margin:30px auto;
-                max-width:500px;
-                padding:30px;
-                text-align:center;
-            "
-        >
-
-            <h2>
-                🔍 Checking...
-            </h2>
-
-            <p>
-                正在確認今天是否已經打卡...
-            </p>
-
-        </div>
-
-        <button id="backCheckingButton">
-            ⬅ 返回主選單
-        </button>
-
-    `;
-
-
-    document
-        .getElementById(
-            "backCheckingButton"
-        )
-        .addEventListener(
-            "click",
-            showMainMenu
-        );
-
-
-    try {
-
-        const alreadyClockedIn =
-            await checkTodayClockIn();
-
-
-        // ========================================
-        // ⭐ 已經打卡
-        // ========================================
-
-        if (alreadyClockedIn) {
-
-            app.innerHTML = `
-
-                <h1>
-                    Start Work 開始工作
-                </h1>
-
-                <div
-                    style="
-                        max-width:600px;
-                        margin:30px auto;
-                        padding:35px 25px;
-                        text-align:center;
-                        background:#f8fafc;
-                        border-radius:20px;
-                        border:2px solid #e2e8f0;
-                    "
-                >
-
-                    <div
-                        style="
-                            font-size:65px;
-                            margin-bottom:15px;
-                        "
-                    >
-                        ✅
-                    </div>
-
-                    <h2>
-                        Today’s Clock In is completed!
-                    </h2>
-
-                    <h2>
-                        今天已經完成上班打卡！
-                    </h2>
-
-                    <p>
-                        你今天已經打卡過了。
-                    </p>
-
-                    <p>
-                        每位學生每天只能 Clock In 一次。
-                    </p>
-
-                    <br>
-
-                    <button id="backAlreadyButton">
-                        ⬅ 返回主選單
-                    </button>
-
-                </div>
-
-            `;
-
-
-            document
-                .getElementById(
-                    "backAlreadyButton"
-                )
-                .addEventListener(
-                    "click",
-                    showMainMenu
-                );
-
-
-            return;
-
-        }
-
-
-        // ========================================
-        // ⭐ 尚未打卡
-        // 顯示原本的打卡畫面
-        // ========================================
-
-        showStartWorkForm();
-
-    }
-
-    catch (error) {
-
-        app.innerHTML = `
-
-            <h1>
-                Start Work 開始工作
-            </h1>
-
-            <div class="error">
-
-                <h2>
-                    ❌ 無法確認打卡狀態
-                </h2>
-
-                <p>
-                    ${escapeHTML(
-                        error.message
-                    )}
-                </p>
-
-                <p>
-                    請確認網路連線後再試一次。
-                </p>
-
-            </div>
-
-            <br>
-
-            <button id="backCheckErrorButton">
-                ⬅ 返回主選單
-            </button>
-
-        `;
-
-
-        document
-            .getElementById(
-                "backCheckErrorButton"
-            )
-            .addEventListener(
-                "click",
-                showMainMenu
-            );
-
-    }
-
-}
-
-
-// ========================================
-// ⭐ Start Work 表單
-// 只有今天尚未 Clock In 才會出現
-// ========================================
-
-function showStartWorkForm() {
+function showStartWork() {
 
     selectedWorkplace = "";
 
@@ -1247,6 +962,10 @@ function showStartWorkForm() {
 
         <p id="selectedWorkplace"></p>
 
+
+        <!-- =================================
+             ⭐ 工作照片
+        ================================== -->
 
         <div
             style="
@@ -1319,6 +1038,10 @@ function showStartWorkForm() {
     `;
 
 
+    // ========================================
+    // 工作場所
+    // ========================================
+
     document
         .getElementById(
             "storeButton"
@@ -1375,6 +1098,10 @@ function showStartWorkForm() {
         );
 
 
+    // ========================================
+    // ⭐ 照片選擇
+    // ========================================
+
     document
         .getElementById(
             "workPhoto"
@@ -1384,6 +1111,10 @@ function showStartWorkForm() {
             handlePhotoSelect
         );
 
+
+    // ========================================
+    // Clock In
+    // ========================================
 
     document
         .getElementById(
@@ -1432,7 +1163,7 @@ function chooseWorkplace(workplace) {
 
 
 // ========================================
-// 選擇照片
+// ⭐ 選擇照片
 // ========================================
 
 function handlePhotoSelect(event) {
@@ -1470,6 +1201,7 @@ function handlePhotoSelect(event) {
     }
 
 
+    // 必須是圖片
     if (
         !file.type.startsWith("image/")
     ) {
@@ -1498,6 +1230,7 @@ function handlePhotoSelect(event) {
         escapeHTML(file.name);
 
 
+    // 顯示預覽
     const reader =
         new FileReader();
 
@@ -1523,7 +1256,7 @@ function handlePhotoSelect(event) {
 
 
 // ========================================
-// 控制 Clock In 按鈕
+// ⭐ 控制 Clock In 按鈕
 // ========================================
 
 function updateClockInButton() {
@@ -1539,10 +1272,13 @@ function updateClockInButton() {
     }
 
 
+    // 必須同時選擇：
+    // 1. 工作場所
+    // 2. 照片
+
     if (
         selectedWorkplace &&
-        selectedPhotoFile &&
-        !todayAlreadyClockedIn
+        selectedPhotoFile
     ) {
 
         button.style.display =
@@ -1570,102 +1306,30 @@ function updateClockInButton() {
 async function clockIn() {
 
     if (!currentStudent) {
-
-        alert(
-            "找不到學生資料"
-        );
-
+        alert("找不到學生資料");
         return;
-
     }
-
 
     if (!selectedWorkplace) {
-
-        alert(
-            "請先選擇工作場所"
-        );
-
+        alert("請先選擇工作場所");
         return;
-
     }
-
 
     if (!selectedPhotoFile) {
-
-        alert(
-            "📷 請先拍攝／選擇工作照片，才能打卡！"
-        );
-
+        alert("📷 請先拍攝／選擇工作照片，才能打卡！");
         return;
-
     }
 
-
-    // ========================================
-    // ⭐ 再檢查一次
-    // 防止學生開兩個頁面／快速重複按
-    // ========================================
-
-    try {
-
-        const alreadyClockedIn =
-            await checkTodayClockIn();
-
-
-        if (alreadyClockedIn) {
-
-            todayAlreadyClockedIn =
-                true;
-
-
-            alert(
-                "⛔ 今天已經完成上班打卡！"
-            );
-
-
-            showStartWork();
-
-            return;
-
-        }
-
-    }
-    catch (error) {
-
-        alert(
-            "無法確認今天的打卡狀態。\n" +
-            "為避免重複打卡，系統暫時不會送出資料。"
-        );
-
-        return;
-
-    }
-
-
-    const now =
-        new Date();
-
+    const now = new Date();
 
     const message =
-        document.getElementById(
-            "clockInMessage"
-        );
-
+        document.getElementById("clockInMessage");
 
     const clockButton =
-        document.getElementById(
-            "clockInButton"
-        );
+        document.getElementById("clockInButton");
 
-
-    clockButton.disabled =
-        true;
-
-
-    clockButton.textContent =
-        "⏳ 照片上傳中...";
-
+    clockButton.disabled = true;
+    clockButton.textContent = "⏳ 照片上傳中...";
 
     message.innerHTML = `
         <div class="loading">
@@ -1673,24 +1337,24 @@ async function clockIn() {
         </div>
     `;
 
-
     try {
+
+        // ========================================
+        // 1. 取得原始照片
+        // ========================================
 
         const originalFile =
             selectedPhotoFile;
-
 
         console.log(
             "📷 原始檔名：",
             originalFile.name
         );
 
-
         console.log(
             "📷 原始格式：",
             originalFile.type
         );
-
 
         console.log(
             "📷 原始大小：",
@@ -1699,7 +1363,13 @@ async function clockIn() {
 
 
         // ========================================
-        // 建立照片檔名
+        // 2. 建立新的照片檔名
+        //
+        // 格式：
+        // 日期_學生姓名_原始檔名
+        //
+        // 例如：
+        // 2026-09-14_王小明_IMG_1234.HEIC
         // ========================================
 
         const newPhotoFileName =
@@ -1717,7 +1387,11 @@ async function clockIn() {
 
 
         // ========================================
-        // 原始照片轉 Base64
+        // 3. 直接使用原始照片
+        //
+        // 不壓縮
+        // 不轉 JPEG
+        // 不使用 Canvas
         // ========================================
 
         const photoBase64 =
@@ -1726,8 +1400,14 @@ async function clockIn() {
             );
 
 
+        console.log(
+            "📷 Base64 長度：",
+            photoBase64.length
+        );
+
+
         // ========================================
-        // Clock In payload
+        // 4. 先儲存原本的打卡資料
         // ========================================
 
         const payload = {
@@ -1742,17 +1422,7 @@ async function clockIn() {
                 formatTime(now),
 
             workplace:
-                selectedWorkplace,
-
-            photoBase64:
-                photoBase64,
-
-            photoMimeType:
-                originalFile.type,
-
-            photoFileName:
-                newPhotoFileName
-
+                selectedWorkplace
         };
 
 
@@ -1763,15 +1433,10 @@ async function clockIn() {
         `;
 
 
-        // ========================================
-        // ⭐ Clock In
-        // ========================================
-
         const attendanceResponse =
             await fetch(
                 SCRIPT_URL,
                 {
-
                     method: "POST",
 
                     headers: {
@@ -1783,7 +1448,6 @@ async function clockIn() {
                         JSON.stringify(
                             payload
                         )
-
                 }
             );
 
@@ -1791,7 +1455,7 @@ async function clockIn() {
         if (!attendanceResponse.ok) {
 
             throw new Error(
-                "打卡系統 HTTP " +
+                "原本打卡系統 HTTP " +
                 attendanceResponse.status
             );
 
@@ -1803,30 +1467,9 @@ async function clockIn() {
 
 
         console.log(
-            "📝 Clock In API 回傳：",
+            "📝 原本打卡 API 回傳：",
             attendanceResult
         );
-
-
-        // ========================================
-        // ⭐⭐⭐ 後端發現重複
-        // ========================================
-
-        if (
-            attendanceResult.alreadyClockedIn ===
-            true
-        ) {
-
-            todayAlreadyClockedIn =
-                true;
-
-
-            throw new Error(
-                attendanceResult.message ||
-                "今天已經完成上班打卡！"
-            );
-
-        }
 
 
         if (
@@ -1836,19 +1479,118 @@ async function clockIn() {
 
             throw new Error(
                 attendanceResult.message ||
-                "打卡資料儲存失敗"
+                "原本打卡資料儲存失敗"
             );
 
         }
 
 
         // ========================================
-        // 成功
+        // 5. 上傳原始照片
         // ========================================
 
-        todayAlreadyClockedIn =
-            true;
+        message.innerHTML = `
+            <div class="loading">
+                📝 打卡資料已儲存<br>
+                📷 正在上傳原始照片...
+            </div>
+        `;
 
+
+        const photoResponse =
+            await fetch(
+                PHOTO_UPLOAD_URL,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "text/plain;charset=utf-8"
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            photoBase64:
+                                photoBase64,
+
+                            photoFileName:
+                                newPhotoFileName,
+
+                            photoMimeType:
+                                originalFile.type
+
+                        })
+                }
+            );
+
+
+        if (!photoResponse.ok) {
+
+            throw new Error(
+                "照片上傳 HTTP " +
+                photoResponse.status
+            );
+
+        }
+
+
+        // ========================================
+        // 6. 讀取照片 API 回傳
+        // ========================================
+
+        const photoText =
+            await photoResponse.text();
+
+
+        console.log(
+            "📷 照片 API 原始回傳：",
+            photoText
+        );
+
+
+        let photoResult;
+
+        try {
+
+            photoResult =
+                JSON.parse(
+                    photoText
+                );
+
+        }
+        catch (parseError) {
+
+            throw new Error(
+                "照片 API 回傳格式錯誤：" +
+                photoText
+            );
+
+        }
+
+
+        console.log(
+            "📷 照片 API 回傳：",
+            photoResult
+        );
+
+
+        if (
+            photoResult.status !==
+            "success"
+        ) {
+
+            throw new Error(
+                photoResult.message ||
+                "照片上傳失敗"
+            );
+
+        }
+
+
+        // ========================================
+        // 7. 顯示成功畫面
+        // ========================================
 
         message.innerHTML = `
 
@@ -1887,7 +1629,14 @@ async function clockIn() {
                 </p>
 
                 <p>
-                    📷 工作照片已上傳到雲端
+                    📷 原始照片已上傳到雲端
+                </p>
+
+                <p>
+                    📄 ${escapeHTML(
+                        photoResult.fileName ||
+                        newPhotoFileName
+                    )}
                 </p>
 
                 <br>
@@ -1903,12 +1652,9 @@ async function clockIn() {
         `;
 
 
-        clockButton.style.display =
-            "none";
+        clockButton.style.display = "none";
 
-
-        selectedPhotoFile =
-            null;
+        selectedPhotoFile = null;
 
 
         document
@@ -1920,8 +1666,8 @@ async function clockIn() {
                 showMainMenu
             );
 
-    }
 
+    }
     catch (error) {
 
         console.error(
@@ -1930,9 +1676,7 @@ async function clockIn() {
         );
 
 
-        clockButton.disabled =
-            false;
-
+        clockButton.disabled = false;
 
         clockButton.textContent =
             "🟢 Clock In 打卡上班";
@@ -1959,7 +1703,6 @@ async function clockIn() {
     }
 
 }
-
 
 // ========================================
 // Lunch / Dinner
@@ -2097,9 +1840,11 @@ async function saveLunch() {
     if (!food) {
 
         message.innerHTML = `
+
             <div class="error">
                 ❌ 請輸入吃了什麼
             </div>
+
         `;
 
         return;
@@ -2110,9 +1855,11 @@ async function saveLunch() {
     if (!cost) {
 
         message.innerHTML = `
+
             <div class="error">
                 ❌ 請輸入花費金額
             </div>
+
         `;
 
         return;
@@ -2153,9 +1900,11 @@ async function saveLunch() {
 
 
     message.innerHTML = `
+
         <div class="loading">
             正在儲存資料...
         </div>
+
     `;
 
 
@@ -2169,8 +1918,10 @@ async function saveLunch() {
                     method: "POST",
 
                     headers: {
+
                         "Content-Type":
                             "text/plain;charset=utf-8"
+
                     },
 
                     body:
@@ -2443,9 +2194,13 @@ async function clockOut() {
 
 
     message.innerHTML = `
+
         <div class="loading">
+
             正在傳送下班資料...
+
         </div>
+
     `;
 
 
@@ -2459,8 +2214,10 @@ async function clockOut() {
                     method: "POST",
 
                     headers: {
+
                         "Content-Type":
                             "text/plain;charset=utf-8"
+
                     },
 
                     body:
@@ -2694,7 +2451,9 @@ async function fetchFeedback() {
             await response.json();
 
 
-        if (!Array.isArray(data)) {
+        if (
+            !Array.isArray(data)
+        ) {
 
             throw new Error(
                 "Teacher Feedback API 回傳的不是陣列"
@@ -2715,7 +2474,8 @@ async function fetchFeedback() {
         const targetName =
             String(
                 currentStudent.name
-            ).trim();
+            )
+            .trim();
 
 
         const records =
@@ -2728,14 +2488,16 @@ async function fetchFeedback() {
                             String(
                                 record.studentName ||
                                 ""
-                            ).trim();
+                            )
+                            .trim();
 
 
                         const date =
                             String(
                                 record.date ||
                                 ""
-                            ).trim();
+                            )
+                            .trim();
 
 
                         const feedback =
@@ -2766,19 +2528,26 @@ async function fetchFeedback() {
                     function(record) {
 
                         return (
+
                             record.studentName ===
                             targetName
+
                             &&
+
                             record.feedback !== ""
+
                         );
 
                     }
                 );
 
 
-        if (records.length === 0) {
+        if (
+            records.length === 0
+        ) {
 
             message.className = "";
+
 
             message.innerHTML = `
 
@@ -2814,6 +2583,7 @@ async function fetchFeedback() {
 
             `;
 
+
             return;
 
         }
@@ -2822,11 +2592,19 @@ async function fetchFeedback() {
         records.sort(
             function(a, b) {
 
-                return (
-                    parseFeedbackDate(b.date)
-                    -
-                    parseFeedbackDate(a.date)
-                );
+                const dateA =
+                    parseFeedbackDate(
+                        a.date
+                    );
+
+
+                const dateB =
+                    parseFeedbackDate(
+                        b.date
+                    );
+
+
+                return dateB - dateA;
 
             }
         );
@@ -2846,7 +2624,10 @@ async function fetchFeedback() {
                 displayDate =
                     String(displayDate)
                         .trim()
-                        .replace(/\//g, "-");
+                        .replace(
+                            /\//g,
+                            "-"
+                        );
 
 
                 if (
@@ -2887,7 +2668,8 @@ async function fetchFeedback() {
             );
 
 
-        let feedbackHTML = "";
+        let feedbackHTML =
+            "";
 
 
         sortedDates.forEach(
@@ -3063,4 +2845,3 @@ document.addEventListener(
     "DOMContentLoaded",
     showHome
 );
-```
