@@ -9,7 +9,7 @@
 // ========================================
 
 const SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbyYNfbGy5H-W7XKlnTBWFBcKzmwX041tIUuk3j8DjFGMOR0pSG_MZG3vo4Zxs3lGADcgw/exec";
+    "https://script.google.com/macros/s/AKfycbxG2OFHhp5_XMx8iqrZygKaYsZenfaTFXycYmhKOvkFYe4XZ1ZdgQQvVXg3IOAyrQHoaw/exec";
 
 // ========================================
 // ⭐ 照片專用 Google Apps Script
