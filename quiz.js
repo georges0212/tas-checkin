@@ -674,8 +674,24 @@
             交卷時間：
             ${escapeHTML(result.submittedAt || "未提供")}
           </p>
+          <button
+  type="button"
+  data-submission-id="${escapeHTML(result.submissionId)}"
+  style="width:100%;margin-top:10px;"
+>
+  📖 查看本次作答紀錄
+</button>
+
         </section>
       `).join("");
+       list.querySelectorAll("[data-submission-id]").forEach(
+  (button) => {
+    button.addEventListener("click", () => {
+      showQuizAnswers(button.dataset.submissionId);
+    });
+  }
+);
+      
     } catch (error) {
       const status =
         document.getElementById("quizResultsStatus");
@@ -686,7 +702,99 @@
       }
     }
   }
+// ---------- 個人作答紀錄 ----------
 
+async function showQuizAnswers(submissionId) {
+  render(`
+    <h1>📖 我的作答紀錄</h1>
+    <div id="quizAnswersStatus" class="loading">
+      ⏳ 正在讀取作答紀錄……
+    </div>
+    <div id="quizAnswersList"></div>
+    <button id="quizAnswersBack" type="button">
+      ⬅ 返回歷次成績
+    </button>
+  `);
+
+  addBackButton("quizAnswersBack", showQuizResults);
+
+  try {
+    const data = await callAPI({
+      action: "answers",
+      studentName: studentName,
+      submissionId: submissionId
+    });
+
+    const answers = Array.isArray(data.answers)
+      ? data.answers
+      : [];
+
+    const status = document.getElementById("quizAnswersStatus");
+    const list = document.getElementById("quizAnswersList");
+
+    if (!status || !list) return;
+
+    if (answers.length === 0) {
+      status.textContent = "目前沒有作答紀錄。";
+      return;
+    }
+
+    status.className = "";
+    status.textContent = `共 ${answers.length} 題`;
+
+    list.innerHTML = answers.map((item) => `
+      <section style="
+        text-align:left;
+        background:#ffffff;
+        border:1px solid #dbeafe;
+        border-radius:14px;
+        padding:16px;
+        margin:12px 0;
+      ">
+        <h2>第 ${Number(item.questionNumber)} 題</h2>
+
+        <p style="line-height:1.7;">
+          ${escapeHTML(item.question)}
+        </p>
+
+        <p>
+          你的答案：
+          <strong>
+            ${escapeHTML(item.selectedAnswer)}.
+            ${escapeHTML(item.selectedText)}
+          </strong>
+        </p>
+
+        <p style="
+          color:${item.isCorrect ? "#16a34a" : "#dc2626"};
+          font-weight:bold;
+        ">
+          ${item.isCorrect ? "✓ 答對" : "✗ 答錯"}
+        </p>
+
+        ${!item.isCorrect ? `
+          <p style="color:#16a34a;font-weight:bold;">
+            正確答案：
+            ${escapeHTML(item.correctAnswer)}.
+            ${escapeHTML(item.correctText)}
+          </p>
+        ` : ""}
+      </section>
+    `).join("");
+
+  } catch (error) {
+    const status = document.getElementById("quizAnswersStatus");
+
+    if (status) {
+      status.className = "error";
+      status.textContent = error.message;
+    }
+  }
+}
+
+
+// ---------- 將測驗按鈕加入原本主選單 ----------
+   
   // ---------- 將測驗按鈕加入原本主選單 ----------
   // 不修改原本主選單的 HTML 或其他按鈕。
 
