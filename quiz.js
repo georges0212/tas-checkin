@@ -16,7 +16,14 @@
   let questions = [];
   let answers = {};
   let busy = false;
+  // ---------- AI 老師評語閱讀挑戰 ----------
 
+  let readingChallengeId = "";
+  let readingQuestions = [];
+  let readingIndex = 0;
+  let readingNeedsCorrection = false;
+  let readingCorrectSentence = "";
+   
   // ---------- 安全顯示文字 ----------
 
   function escapeHTML(value) {
@@ -254,6 +261,9 @@
 
   // ---------- 開始測驗 ----------
 
+
+  // ---------- 開始測驗：先進入閱讀挑戰 ----------
+
   async function startQuiz(weekNumber) {
     if (busy) return;
 
@@ -263,51 +273,463 @@
     questions = [];
     questionSetId = "";
 
+    readingChallengeId = "";
+    readingQuestions = [];
+    readingIndex = 0;
+    readingNeedsCorrection = false;
+    readingCorrectSentence = "";
+
     render(`
-      <h1>第 ${weekNumber} 週測驗</h1>
-
+      <h1>📖 AI 老師評語閱讀挑戰</h1>
       <p>${escapeHTML(studentName)}</p>
-
       <div class="loading">
-        ⏳ 正在準備測驗題目……
+        ⏳ AI 正在準備本週閱讀挑戰……
       </div>
-
-      <p>第一次產生題目可能需要較長時間。</p>
-
-      <button id="quizCancelButton" type="button">
+      <p>請完成所有閱讀題目，才能進入正式測驗。</p>
+      <button id="readingCancelButton" type="button">
         ⬅ 返回測驗選單
       </button>
     `);
 
-    addBackButton(
-      "quizCancelButton",
-      showQuizHome
+    addBackButton("readingCancelButton", showQuizHome);
+
+    try {
+      // 每次重新進入都要求後端重設閱讀挑戰
+      const data = await callAPI({
+        action: "getReadingChallenge",
+        studentName: studentName,
+        weekNumber: String(weekNumber),
+        reset: "1"
+      });
+
+      readingChallengeId = String(data.challengeId || "");
+
+      readingQuestions = Array.isArray(data.questions)
+        ? data.questions
+        : [];
+
+      if (
+        !readingChallengeId ||
+        readingQuestions.length < 3 ||
+        readingQuestions.length > 5
+      ) {
+        throw new Error("閱讀挑戰題目資料不完整，請返回後重新嘗試。");
+      }
+
+      readingIndex = 0;
+      readingNeedsCorrection = false;
+      readingCorrectSentence = "";
+
+      renderReadingChallenge();
+
+    } catch (error) {
+      render(`
+        <h1>無法開啟閱讀挑戰</h1>
+        <div class="error">
+          ${escapeHTML(error.message)}
+        </div>
+        <br>
+        <button id="readingReturnButton" type="button">
+          返回測驗選單
+        </button>
+      `);
+
+      addBackButton("readingReturnButton", showQuizHome);
+
+    } finally {
+      busy = false;
+    }
+  }
+
+  // ---------- 顯示閱讀挑戰 ----------
+
+  function renderReadingChallenge() {
+    const q = readingQuestions[readingIndex];
+
+    if (!q) {
+      loadOfficialQuiz();
+      return;
+    }
+
+    const options = [
+      ["A", q.optionA],
+      ["B", q.optionB],
+      ["C", q.optionC],
+      ["D", q.optionD]
+    ];
+
+    const correctionHTML = readingNeedsCorrection
+      ? `
+        <div style="
+          background:#fff7ed;
+          border:2px solid #fb923c;
+          border-radius:14px;
+          padding:16px;
+          margin-top:18px;
+          text-align:left;
+        ">
+          <h3>✏️ 請完成整句訂正</h3>
+
+          <p style="line-height:1.7;">
+            ${escapeHTML(readingCorrectSentence)}
+          </p>
+
+          <p>
+            請將上面的完整正確句子重新輸入。
+          </p>
+
+          <textarea
+            id="readingCorrectionInput"
+            rows="3"
+            style="
+              width:100%;
+              box-sizing:border-box;
+              padding:12px;
+              font-size:17px;
+              border:1px solid #cbd5e1;
+              border-radius:10px;
+            "
+            placeholder="請輸入完整正確句子"
+          ></textarea>
+
+          <button
+            id="readingCorrectionButton"
+            type="button"
+            style="width:100%;margin-top:12px;"
+          >
+            送出訂正
+          </button>
+        </div>
+      `
+      : `
+        <div id="readingOptionArea">
+          ${options.map(([key, value]) => `
+            <label style="
+              display:flex;
+              align-items:flex-start;
+              gap:10px;
+              text-align:left;
+              font-size:17px;
+              line-height:1.6;
+              padding:12px;
+              margin:8px 0;
+              background:#f8fafc;
+              border-radius:10px;
+              cursor:pointer;
+            ">
+              <input
+                type="radio"
+                name="readingAnswer"
+                value="${key}"
+                style="width:20px;min-width:20px;margin-top:5px;"
+              >
+              <span>
+                <strong>${key}.</strong>
+                ${escapeHTML(value)}
+              </span>
+            </label>
+          `).join("")}
+        </div>
+
+        <button
+          id="readingAnswerButton"
+          type="button"
+          style="width:100%;margin-top:12px;"
+        >
+          確認答案
+        </button>
+      `;
+
+    const progress = readingIndex + 1;
+
+    render(`
+      <h1>📖 AI 老師評語閱讀挑戰</h1>
+
+      <p>第 ${currentWeek} 週｜${escapeHTML(studentName)}</p>
+
+      <div style="
+        background:#dbeafe;
+        border-radius:12px;
+        padding:12px;
+        margin:12px 0;
+      ">
+        <strong>
+          閱讀進度：第 ${progress} / ${readingQuestions.length} 題
+        </strong>
+      </div>
+
+      <section style="
+        text-align:left;
+        background:#ffffff;
+        border:1px solid #dbeafe;
+        border-radius:16px;
+        padding:18px;
+        margin:16px 0;
+      ">
+        <h2>第 ${progress} 題</h2>
+
+        <p style="
+          font-size:19px;
+          line-height:1.8;
+          white-space:pre-line;
+        ">
+          ${escapeHTML(q.question)}
+        </p>
+
+        ${correctionHTML}
+
+        <div id="readingMessage"></div>
+      </section>
+
+      <button id="readingCancelButton" type="button">
+        ⬅ 返回測驗選單
+      </button>
+    `);
+
+    addBackButton("readingCancelButton", showQuizHome);
+
+    if (readingNeedsCorrection) {
+      addBackButton(
+        "readingCorrectionButton",
+        submitReadingCorrection
+      );
+    } else {
+      addBackButton(
+        "readingAnswerButton",
+        submitReadingAnswer
+      );
+    }
+  }
+
+  // ---------- 選擇閱讀題答案 ----------
+
+  async function submitReadingAnswer() {
+    if (busy) return;
+
+    const selected = document.querySelector(
+      'input[name="readingAnswer"]:checked'
     );
+
+    const message = document.getElementById("readingMessage");
+
+    if (!selected) {
+      message.className = "error";
+      message.textContent = "請先選擇一個答案。";
+      return;
+    }
+
+    busy = true;
+
+    const button = document.getElementById("readingAnswerButton");
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "⏳ 正在確認答案……";
+    }
+
+    try {
+      const data = await callAPI({
+        action: "checkReadingAnswer",
+        studentName: studentName,
+        weekNumber: String(currentWeek),
+        challengeId: readingChallengeId,
+        questionIndex: String(readingIndex),
+        selectedAnswer: selected.value,
+        correctionSentence: ""
+      });
+
+      if (data.passed === true) {
+        readingIndex++;
+        readingNeedsCorrection = false;
+        readingCorrectSentence = "";
+
+        if (readingIndex >= readingQuestions.length) {
+          await loadOfficialQuiz();
+        } else {
+          renderReadingChallenge();
+        }
+
+        return;
+      }
+
+      if (data.needsCorrection === true) {
+        readingNeedsCorrection = true;
+        readingCorrectSentence = String(
+          data.correctSentence || ""
+        );
+
+        if (!readingCorrectSentence) {
+          throw new Error("伺服器沒有提供正確完整句，請重新嘗試。");
+        }
+
+        renderReadingChallenge();
+
+        const newMessage = document.getElementById("readingMessage");
+
+        if (newMessage) {
+          newMessage.className = "error";
+          newMessage.textContent =
+            "這次選擇不正確，請參考正確句子，完成整句訂正。";
+        }
+
+        return;
+      }
+
+      throw new Error(data.message || "答案確認失敗，請重新嘗試。");
+
+    } catch (error) {
+      const currentMessage = document.getElementById("readingMessage");
+
+      if (currentMessage) {
+        currentMessage.className = "error";
+        currentMessage.textContent = error.message;
+      }
+
+      const retryButton = document.getElementById("readingAnswerButton");
+
+      if (retryButton) {
+        retryButton.disabled = false;
+        retryButton.textContent = "確認答案";
+      }
+
+    } finally {
+      busy = false;
+    }
+  }
+
+  // ---------- 完整句訂正 ----------
+
+  async function submitReadingCorrection() {
+    if (busy) return;
+
+    const input = document.getElementById("readingCorrectionInput");
+    const message = document.getElementById("readingMessage");
+
+    if (!input || !input.value.trim()) {
+      message.className = "error";
+      message.textContent = "請輸入完整正確句子。";
+      return;
+    }
+
+    busy = true;
+
+    const button = document.getElementById("readingCorrectionButton");
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "⏳ 正在檢查訂正……";
+    }
+
+    try {
+      const data = await callAPI({
+        action: "checkReadingAnswer",
+        studentName: studentName,
+        weekNumber: String(currentWeek),
+        challengeId: readingChallengeId,
+        questionIndex: String(readingIndex),
+        selectedAnswer: "",
+        correctionSentence: input.value
+      });
+
+      if (
+        data.passed === true ||
+        data.correctionCorrect === true
+      ) {
+        readingIndex++;
+        readingNeedsCorrection = false;
+        readingCorrectSentence = "";
+
+        if (readingIndex >= readingQuestions.length) {
+          await loadOfficialQuiz();
+        } else {
+          renderReadingChallenge();
+        }
+
+        return;
+      }
+
+      if (data.correctionCorrect === false) {
+        message.className = "error";
+        message.textContent =
+          "訂正還不完全正確，請再次檢查文字，並重新輸入完整句子。";
+
+        input.value = "";
+        input.focus();
+
+        button.disabled = false;
+        button.textContent = "重新送出訂正";
+        return;
+      }
+
+      throw new Error(data.message || "訂正檢查失敗，請重新嘗試。");
+
+    } catch (error) {
+      const currentMessage = document.getElementById("readingMessage");
+
+      if (currentMessage) {
+        currentMessage.className = "error";
+        currentMessage.textContent = error.message;
+      }
+
+      const retryButton = document.getElementById("readingCorrectionButton");
+
+      if (retryButton) {
+        retryButton.disabled = false;
+        retryButton.textContent = "重新送出訂正";
+      }
+
+    } finally {
+      busy = false;
+    }
+  }
+
+  // ---------- 閱讀挑戰通過，開啟正式測驗 ----------
+
+  async function loadOfficialQuiz() {
+    if (!readingChallengeId) {
+      throw new Error("閱讀挑戰通關資料不存在，無法開啟正式測驗。");
+    }
+
+    render(`
+      <h1>🎉 閱讀挑戰完成！</h1>
+
+      <div class="success">
+        <p>所有閱讀題目都已經通過。</p>
+        <p>現在為你開啟正式的 10 題測驗。</p>
+      </div>
+
+      <div class="loading">
+        ⏳ 正在準備正式測驗題目……
+      </div>
+    `);
 
     try {
       const data = await callAPI({
         action: "getQuiz",
         studentName: studentName,
-        weekNumber: String(weekNumber)
+        weekNumber: String(currentWeek),
+        challengeId: readingChallengeId
       });
 
-      questionSetId =
-        String(data.questionSetId || "");
+      questionSetId = String(data.questionSetId || "");
 
       questions = Array.isArray(data.questions)
         ? data.questions
         : [];
 
+      answers = {};
+
       if (!questionSetId || questions.length !== 10) {
         throw new Error(
-          "測驗題目資料不完整，請返回後重新嘗試。"
+          "正式測驗題目資料不完整，請返回後重新嘗試。"
         );
       }
 
       renderQuestions();
+
     } catch (error) {
       render(`
-        <h1>無法開啟測驗</h1>
+        <h1>無法開啟正式測驗</h1>
 
         <div class="error">
           ${escapeHTML(error.message)}
@@ -320,14 +742,11 @@
         </button>
       `);
 
-      addBackButton(
-        "quizReturnButton",
-        showQuizHome
-      );
-    } finally {
-      busy = false;
+      addBackButton("quizReturnButton", showQuizHome);
+
     }
   }
+
 
   // ---------- 顯示題目 ----------
 
@@ -518,12 +937,14 @@
 
     try {
       const data = await callAPI({
-        action: "submit",
-        studentName: studentName,
-        weekNumber: String(currentWeek),
-        questionSetId: questionSetId,
-        answers: JSON.stringify(orderedAnswers)
-      });
+  action: "submit",
+  studentName: studentName,
+  weekNumber: String(currentWeek),
+  questionSetId: questionSetId,
+  challengeId: readingChallengeId,
+  answers: JSON.stringify(orderedAnswers)
+});
+       
 
       render(`
         <div class="success">
