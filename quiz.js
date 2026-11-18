@@ -8,7 +8,7 @@
   "use strict";
 
   const QUIZ_API_URL =
-    "https://script.google.com/macros/s/AKfycbyLPkIEnwiU6g2-IsGPLiYVlZ4pc1kB-qvi-vatmqC-ixsj_vo02yuib5-BAOx5OXvE/exec";
+    "https://script.google.com/macros/s/AKfycbwGRa6OuqbAa7vhCTefJbzv8WulefqEJ4L_-x4nUur26K_FY0o5PgoeQY79zJH7-fUf/exec";
 
   let studentName = "";
   let currentWeek = 0;
