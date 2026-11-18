@@ -578,130 +578,129 @@
 
   // ---------- 個人成績 ----------
 
-  async function showQuizResults() {
-    studentName = getStudentName();
 
-    if (!studentName) {
-      alert("請先選擇學生並完成生日驗證。");
+async function showQuizResults() {
+  studentName = getStudentName();
+
+  if (!studentName) {
+    alert("請先選擇學生並完成生日驗證。");
+    return;
+  }
+
+  render(`
+    <h1>📊 我的測驗成績</h1>
+    <h2>${escapeHTML(studentName)}</h2>
+    <div id="quizResultsStatus" class="loading">
+      ⏳ 正在讀取成績……
+    </div>
+    <div id="quizResultsList"></div>
+    <br>
+    <button id="quizResultsBack" type="button">
+      ⬅ 返回測驗選單
+    </button>
+  `);
+
+  addBackButton("quizResultsBack", showQuizHome);
+
+  try {
+    const data = await callAPI({
+      action: "results",
+      studentName: studentName
+    });
+
+    const results = Array.isArray(data.results)
+      ? data.results
+      : [];
+
+    const status = document.getElementById("quizResultsStatus");
+    const list = document.getElementById("quizResultsList");
+
+    if (!status || !list) return;
+
+    if (results.length === 0) {
+      status.className = "";
+      status.textContent = "目前還沒有測驗成績。";
       return;
     }
 
-    render(`
-      <h1>📊 我的測驗成績</h1>
-
-      <h2>${escapeHTML(studentName)}</h2>
-
-      <div id="quizResultsStatus" class="loading">
-        ⏳ 正在讀取成績……
-      </div>
-
-      <div id="quizResultsList"></div>
-
-      <br>
-
-      <button id="quizResultsBack" type="button">
-        ⬅ 返回測驗選單
-      </button>
-    `);
-
-    addBackButton(
-      "quizResultsBack",
-      showQuizHome
+    results.sort(
+      (a, b) => Number(b.weekNumber) - Number(a.weekNumber)
     );
 
-    try {
-      const data = await callAPI({
-        action: "results",
-        studentName: studentName
-      });
+    status.className = "";
+    status.textContent = `共 ${results.length} 筆測驗紀錄`;
 
-      const results = Array.isArray(data.results)
-        ? data.results
-        : [];
+    console.log("TAS 成績資料：", results);
+    console.log("第一筆 submissionId：", results[0].submissionId);
 
-      const status =
-        document.getElementById("quizResultsStatus");
+    list.innerHTML = results.map((result, index) => {
+      const submissionId = String(result.submissionId || "").trim();
 
-      const list =
-        document.getElementById("quizResultsList");
-
-      if (!status || !list) return;
-
-      if (results.length === 0) {
-        status.className = "";
-        status.textContent = "目前還沒有測驗成績。";
-        return;
-      }
-
-      results.sort(
-        (a, b) =>
-          Number(b.weekNumber) - Number(a.weekNumber)
-      );
-
-      status.className = "";
-      status.textContent =
-        `共 ${results.length} 筆測驗紀錄`;
-
-      list.innerHTML = results.map((result) => `
-        <section
-          style="
-            text-align:left;
-            background:#ffffff;
-            border:1px solid #dbeafe;
-            border-radius:14px;
-            padding:16px;
-            margin:12px 0;
-          "
-        >
+      return `
+        <section style="
+          display:block;
+          text-align:left;
+          background:#fff;
+          border:2px solid #2563eb;
+          border-radius:14px;
+          padding:16px;
+          margin:12px 0;
+        ">
           <h2>第 ${Number(result.weekNumber)} 週</h2>
+          <p>成績：<strong>${Number(result.score)} / 100 分</strong></p>
+          <p>答對題數：${Number(result.correctCount)} / 10 題</p>
+          <p>評語日期：${escapeHTML(result.feedbackDate || "未提供")}</p>
+          <p>交卷時間：${escapeHTML(result.submittedAt || "未提供")}</p>
 
-          <p>
-            成績：
-            <strong>${Number(result.score)} / 100 分</strong>
-          </p>
-
-          <p>
-            答對題數：
-            ${Number(result.correctCount)} / 10 題
-          </p>
-
-          <p>
-            評語日期：
-            ${escapeHTML(result.feedbackDate || "未提供")}
-          </p>
-
-          <p>
-            交卷時間：
-            ${escapeHTML(result.submittedAt || "未提供")}
-          </p>
-          <button
-  type="button"
-  data-submission-id="${escapeHTML(result.submissionId)}"
-  style="width:100%;margin-top:10px;"
->
-  📖 查看本次作答紀錄
-</button>
-
+          ${
+            submissionId
+              ? `<button type="button"
+                   data-quiz-answer="${index}"
+                   style="
+                     display:block !important;
+                     visibility:visible !important;
+                     opacity:1 !important;
+                     width:100%;
+                     padding:14px;
+                     margin-top:12px;
+                     background:#2563eb;
+                     color:white;
+                     border:0;
+                     border-radius:10px;
+                     font-size:17px;
+                     font-weight:bold;
+                     cursor:pointer;
+                   ">
+                   📖 查看本次作答紀錄
+                 </button>`
+              : `<p style="color:#dc2626;font-weight:bold;">
+                   ⚠ 此筆成績沒有 submissionId，暫時無法查詢作答紀錄。
+                 </p>`
+          }
         </section>
-      `).join("");
-       list.querySelectorAll("[data-submission-id]").forEach(
-  (button) => {
-    button.addEventListener("click", () => {
-      showQuizAnswers(button.dataset.submissionId);
-    });
-  }
-);
-      
-    } catch (error) {
-      const status =
-        document.getElementById("quizResultsStatus");
+      `;
+    }).join("");
 
-      if (status) {
-        status.className = "error";
-        status.textContent = error.message;
-      }
+    list.querySelectorAll("[data-quiz-answer]").forEach(button => {
+      button.addEventListener("click", () => {
+        const index = Number(button.dataset.quizAnswer);
+        const result = results[index];
+        showQuizAnswers(String(result.submissionId).trim());
+      });
+    });
+
+  } catch (error) {
+    const status = document.getElementById("quizResultsStatus");
+
+    if (status) {
+      status.className = "error";
+      status.textContent = error.message;
     }
+
+    console.error("TAS 成績查詢錯誤：", error);
   }
+}
+
 // ---------- 個人作答紀錄 ----------
 
 async function showQuizAnswers(submissionId) {
