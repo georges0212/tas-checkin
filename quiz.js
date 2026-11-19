@@ -53,83 +53,91 @@
   // 使用 JSONP，避免一般跨網域 fetch 的 CORS 問題。
   // Apps Script 必須先加入本文後面的 doGet API 入口。
 
-  function callAPI(params) {
-    return new Promise((resolve, reject) => {
-      const callbackName =
-        "tasQuizCallback_" +
-        Date.now() +
-        "_" +
-        Math.random().toString(36).slice(2);
+  
+function callAPI(params) {
+  return new Promise((resolve, reject) => {
+    const callbackName =
+      "tasQuizCallback_" +
+      Date.now() +
+      "_" +
+      Math.random().toString(36).slice(2);
 
-      const script = document.createElement("script");
+    const script = document.createElement("script");
 
-      let finished = false;
+    let finished = false;
 
-      const timeout = setTimeout(() => {
-        finish();
-        reject(
-          new Error(
-            "測驗伺服器回應逾時，請稍後再試。"
-          )
-        );
-      }, 30000);
+    // Gemini 同步生成需要較長時間，延長至 120 秒。
+    const timeout = setTimeout(() => {
+      finish();
 
-      function finish() {
-        if (finished) return;
-        finished = true;
+      reject(
+        new Error(
+          "測驗伺服器回應逾時（120 秒），請稍候再重新嘗試。"
+        )
+      );
+    }, 120000);
 
-        clearTimeout(timeout);
+    function finish() {
+      if (finished) return;
+      finished = true;
 
-        try {
-          delete window[callbackName];
-        } catch (error) {
-          window[callbackName] = undefined;
-        }
+      clearTimeout(timeout);
 
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
+      try {
+        delete window[callbackName];
+      } catch (error) {
+        window[callbackName] = undefined;
       }
 
-      window[callbackName] = (result) => {
-        finish();
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    }
 
-        if (!result || result.status !== "success") {
-          reject(
-            new Error(
-              result && result.message
-                ? result.message
-                : "測驗 API 回傳格式錯誤。"
-            )
-          );
-          return;
-        }
+    window[callbackName] = (result) => {
+      if (finished) return;
 
-        resolve(result.data);
-      };
+      finish();
 
-      const query = new URLSearchParams({
-        ...params,
-        callback: callbackName,
-        _ts: String(Date.now())
-      });
-
-      script.onerror = () => {
-        finish();
-
+      if (!result || result.status !== "success") {
         reject(
           new Error(
-            "無法連線至測驗伺服器。請檢查 Apps Script 部署網址及權限。"
+            result && result.message
+              ? result.message
+              : "測驗 API 回傳格式錯誤。"
           )
         );
-      };
+        return;
+      }
 
-      script.src =
-        QUIZ_API_URL + "?" + query.toString();
+      resolve(result.data);
+    };
 
-      document.head.appendChild(script);
+    const query = new URLSearchParams({
+      ...params,
+      callback: callbackName,
+      _ts: String(Date.now())
     });
-  }
+
+    script.onerror = () => {
+      if (finished) return;
+
+      finish();
+
+      reject(
+        new Error(
+          "無法連線至測驗伺服器。請檢查 Apps Script 部署網址及權限。"
+        )
+      );
+    };
+
+    script.src =
+      QUIZ_API_URL + "?" + query.toString();
+
+    document.head.appendChild(script);
+  });
+}
+
 
   // ---------- 共用畫面工具 ----------
 
@@ -265,6 +273,7 @@
   // ---------- 開始測驗：先進入閱讀挑戰 ----------
 
   
+
 async function startQuiz(weekNumber) {
   if (busy) return;
 
@@ -284,12 +293,13 @@ async function startQuiz(weekNumber) {
   render(`
     <div class="loading">
       <p>⏳ 正在啟動 AI 老師評語閱讀挑戰……</p>
+      <p>AI 正在閱讀本週教師評語，請稍候。</p>
       <p>題目準備完成後，就可以開始作答。</p>
     </div>
   `);
 
   try {
-    // 1. 只啟動一次背景生成工作
+    // 1. 呼叫後端，直接同步生成閱讀挑戰題目。
     const startData = await callAPI({
       action: "startReadingChallenge",
       studentName: studentName,
@@ -297,20 +307,31 @@ async function startQuiz(weekNumber) {
     });
 
     if (!startData || !startData.jobId) {
-      throw new Error("無法啟動閱讀挑戰，請重新嘗試。");
+      throw new Error(
+        startData && startData.message
+          ? startData.message
+          : "無法啟動閱讀挑戰，請重新嘗試。"
+      );
     }
 
     const jobId = startData.jobId;
 
-    // 2. 每 3 秒查詢一次背景生成狀態
+    // 後端已明確回報生成失敗，不必再輪詢。
+    if (startData.status === "failed") {
+      throw new Error(
+        startData.message || "AI 題目生成失敗，請重新嘗試。"
+      );
+    }
+
+    // 2. 取得生成結果。
+    // 同步生成完成時，通常第一次查詢就會取得 completed。
+    // 若另一個請求正在生成，則每 3 秒查詢一次。
     let challengeData = null;
     let attempts = 0;
-    const maxAttempts = 200;
+    const maxAttempts = 120;
 
     while (attempts < maxAttempts) {
       attempts++;
-
-      await new Promise(resolve => setTimeout(resolve, 3000));
 
       const statusData = await callAPI({
         action: "getReadingChallengeStatus",
@@ -320,7 +341,9 @@ async function startQuiz(weekNumber) {
       });
 
       if (!statusData) {
-        throw new Error("無法取得閱讀挑戰狀態，請重新嘗試。");
+        throw new Error(
+          "無法取得閱讀挑戰狀態，請重新嘗試。"
+        );
       }
 
       if (statusData.status === "completed") {
@@ -334,24 +357,46 @@ async function startQuiz(weekNumber) {
         );
       }
 
+      if (
+        statusData.status !== "processing" &&
+        statusData.status !== "queued"
+      ) {
+        throw new Error(
+          "閱讀挑戰狀態異常，請返回測驗選單後重新嘗試。"
+        );
+      }
+
       render(`
         <div class="loading">
-          <p>⏳ AI 正在閱讀本週教師評語並準備題目……</p>
+          <p>⏳ AI 正在準備閱讀挑戰題目……</p>
           <p>目前狀態：${statusData.status === "queued"
-            ? "等待背景工作執行"
+            ? "等待處理"
             : "正在生成題目"}</p>
           <p>請稍候，不要關閉此頁面。</p>
         </div>
       `);
+
+      // 已完成的同步生成不需要等待；
+      // 只有仍在 processing 時才等待 3 秒。
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
 
     if (!challengeData) {
-      throw new Error("題目準備時間較長，請重新進入閱讀挑戰。");
+      throw new Error(
+        "題目準備時間較長，請稍候再重新進入閱讀挑戰。"
+      );
     }
 
-    // 3. 載入三道閱讀挑戰題目
+    // 3. 載入三道閱讀挑戰題目。
     readingChallengeId = challengeData.challengeId;
-    readingQuestions = challengeData.questions || [];
+
+    readingQuestions = Array.isArray(challengeData.questions)
+      ? challengeData.questions
+      : [];
+
+    if (!readingChallengeId) {
+      throw new Error("閱讀挑戰識別碼不存在，請重新嘗試。");
+    }
 
     if (readingQuestions.length !== 3) {
       throw new Error("閱讀挑戰必須恰好有 3 題。");
@@ -361,7 +406,6 @@ async function startQuiz(weekNumber) {
     readingNeedsCorrection = false;
     readingCorrectSentence = "";
 
-    busy = false;
     renderReadingChallenge();
 
   } catch (error) {
@@ -371,11 +415,25 @@ async function startQuiz(weekNumber) {
       <div class="error">
         <h3>閱讀挑戰暫時無法開始</h3>
         <p>${escapeHTML(error.message || error)}</p>
-        <button onclick="location.reload()">
-          重新載入頁面
+
+        <button id="readingRetryButton" type="button">
+          重新嘗試
+        </button>
+
+        <br><br>
+
+        <button id="readingReturnButton" type="button">
+          返回測驗選單
         </button>
       </div>
     `);
+
+    addBackButton("readingRetryButton", () => {
+      startQuiz(currentWeek);
+    });
+
+    addBackButton("readingReturnButton", showQuizHome);
+
   } finally {
     busy = false;
   }
