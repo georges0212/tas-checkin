@@ -264,82 +264,123 @@
 
   // ---------- 開始測驗：先進入閱讀挑戰 ----------
 
-  async function startQuiz(weekNumber) {
-    if (busy) return;
+  
+async function startQuiz(weekNumber) {
+  if (busy) return;
 
-    busy = true;
-    currentWeek = weekNumber;
-    answers = {};
-    questions = [];
-    questionSetId = "";
+  busy = true;
+  currentWeek = Number(weekNumber);
 
-    readingChallengeId = "";
-    readingQuestions = [];
+  questionSetId = "";
+  questions = [];
+  answers = {};
+
+  readingChallengeId = "";
+  readingQuestions = [];
+  readingIndex = 0;
+  readingNeedsCorrection = false;
+  readingCorrectSentence = "";
+
+  render(`
+    <div class="loading">
+      <p>⏳ 正在啟動 AI 老師評語閱讀挑戰……</p>
+      <p>題目準備完成後，就可以開始作答。</p>
+    </div>
+  `);
+
+  try {
+    // 1. 只啟動一次背景生成工作
+    const startData = await callAPI({
+      action: "startReadingChallenge",
+      studentName: studentName,
+      weekNumber: String(currentWeek)
+    });
+
+    if (!startData || !startData.jobId) {
+      throw new Error("無法啟動閱讀挑戰，請重新嘗試。");
+    }
+
+    const jobId = startData.jobId;
+
+    // 2. 每 3 秒查詢一次背景生成狀態
+    let challengeData = null;
+    let attempts = 0;
+    const maxAttempts = 200;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const statusData = await callAPI({
+        action: "getReadingChallengeStatus",
+        studentName: studentName,
+        weekNumber: String(currentWeek),
+        jobId: jobId
+      });
+
+      if (!statusData) {
+        throw new Error("無法取得閱讀挑戰狀態，請重新嘗試。");
+      }
+
+      if (statusData.status === "completed") {
+        challengeData = statusData;
+        break;
+      }
+
+      if (statusData.status === "failed") {
+        throw new Error(
+          statusData.message || "AI 題目生成失敗，請重新嘗試。"
+        );
+      }
+
+      render(`
+        <div class="loading">
+          <p>⏳ AI 正在閱讀本週教師評語並準備題目……</p>
+          <p>目前狀態：${statusData.status === "queued"
+            ? "等待背景工作執行"
+            : "正在生成題目"}</p>
+          <p>請稍候，不要關閉此頁面。</p>
+        </div>
+      `);
+    }
+
+    if (!challengeData) {
+      throw new Error("題目準備時間較長，請重新進入閱讀挑戰。");
+    }
+
+    // 3. 載入三道閱讀挑戰題目
+    readingChallengeId = challengeData.challengeId;
+    readingQuestions = challengeData.questions || [];
+
+    if (readingQuestions.length !== 3) {
+      throw new Error("閱讀挑戰必須恰好有 3 題。");
+    }
+
     readingIndex = 0;
     readingNeedsCorrection = false;
     readingCorrectSentence = "";
 
+    busy = false;
+    renderReadingChallenge();
+
+  } catch (error) {
+    console.error("閱讀挑戰啟動失敗：", error);
+
     render(`
-      <h1>📖 AI 老師評語閱讀挑戰</h1>
-      <p>${escapeHTML(studentName)}</p>
-      <div class="loading">
-        ⏳ AI 正在準備本週閱讀挑戰……
-      </div>
-      <p>請完成所有閱讀題目，才能進入正式測驗。</p>
-      <button id="readingCancelButton" type="button">
-        ⬅ 返回測驗選單
-      </button>
-    `);
-
-    addBackButton("readingCancelButton", showQuizHome);
-
-    try {
-      // 每次重新進入都要求後端重設閱讀挑戰
-      const data = await callAPI({
-        action: "getReadingChallenge",
-        studentName: studentName,
-        weekNumber: String(weekNumber),
-        reset: "1"
-      });
-
-      readingChallengeId = String(data.challengeId || "");
-
-      readingQuestions = Array.isArray(data.questions)
-        ? data.questions
-        : [];
-
-      if (
-        !readingChallengeId ||
-        readingQuestions.length < 3 ||
-        readingQuestions.length > 5
-      ) {
-        throw new Error("閱讀挑戰題目資料不完整，請返回後重新嘗試。");
-      }
-
-      readingIndex = 0;
-      readingNeedsCorrection = false;
-      readingCorrectSentence = "";
-
-      renderReadingChallenge();
-
-    } catch (error) {
-      render(`
-        <h1>無法開啟閱讀挑戰</h1>
-        <div class="error">
-          ${escapeHTML(error.message)}
-        </div>
-        <br>
-        <button id="readingReturnButton" type="button">
-          返回測驗選單
+      <div class="error">
+        <h3>閱讀挑戰暫時無法開始</h3>
+        <p>${escapeHTML(error.message || error)}</p>
+        <button onclick="location.reload()">
+          重新載入頁面
         </button>
-      `);
-
-      addBackButton("readingReturnButton", showQuizHome);
-
-    } finally {
-      busy = false;
-    }
+      </div>
+    `);
+  } finally {
+    busy = false;
   }
+}
+
 
   // ---------- 顯示閱讀挑戰 ----------
 
@@ -685,67 +726,70 @@
 
   // ---------- 閱讀挑戰通過，開啟正式測驗 ----------
 
-  async function loadOfficialQuiz() {
+  
+async function loadOfficialQuiz() {
+  render(`
+    <h1>🎉 閱讀挑戰完成！</h1>
+
+    <div class="success">
+      <p>所有閱讀題目都已經通過。</p>
+      <p>現在為你開啟正式的 10 題測驗。</p>
+    </div>
+
+    <div class="loading">
+      ⏳ 正在準備正式測驗題目……
+    </div>
+  `);
+
+  try {
+    // 確認閱讀挑戰已經有通關識別碼
     if (!readingChallengeId) {
-      throw new Error("閱讀挑戰通關資料不存在，無法開啟正式測驗。");
+      throw new Error(
+        "閱讀挑戰通關資料不存在，無法開啟正式測驗。"
+      );
     }
 
+    const data = await callAPI({
+      action: "getQuiz",
+      studentName: studentName,
+      weekNumber: String(currentWeek),
+      challengeId: readingChallengeId
+    });
+
+    questionSetId = String(data.questionSetId || "");
+
+    questions = Array.isArray(data.questions)
+      ? data.questions
+      : [];
+
+    answers = {};
+
+    if (!questionSetId || questions.length !== 10) {
+      throw new Error(
+        "正式測驗題目資料不完整，請返回後重新嘗試。"
+      );
+    }
+
+    renderQuestions();
+
+  } catch (error) {
     render(`
-      <h1>🎉 閱讀挑戰完成！</h1>
+      <h1>無法開啟正式測驗</h1>
 
-      <div class="success">
-        <p>所有閱讀題目都已經通過。</p>
-        <p>現在為你開啟正式的 10 題測驗。</p>
+      <div class="error">
+        ${escapeHTML(error.message)}
       </div>
 
-      <div class="loading">
-        ⏳ 正在準備正式測驗題目……
-      </div>
+      <br>
+
+      <button id="quizReturnButton" type="button">
+        返回測驗選單
+      </button>
     `);
 
-    try {
-      const data = await callAPI({
-        action: "getQuiz",
-        studentName: studentName,
-        weekNumber: String(currentWeek),
-        challengeId: readingChallengeId
-      });
-
-      questionSetId = String(data.questionSetId || "");
-
-      questions = Array.isArray(data.questions)
-        ? data.questions
-        : [];
-
-      answers = {};
-
-      if (!questionSetId || questions.length !== 10) {
-        throw new Error(
-          "正式測驗題目資料不完整，請返回後重新嘗試。"
-        );
-      }
-
-      renderQuestions();
-
-    } catch (error) {
-      render(`
-        <h1>無法開啟正式測驗</h1>
-
-        <div class="error">
-          ${escapeHTML(error.message)}
-        </div>
-
-        <br>
-
-        <button id="quizReturnButton" type="button">
-          返回測驗選單
-        </button>
-      `);
-
-      addBackButton("quizReturnButton", showQuizHome);
-
-    }
+    addBackButton("quizReturnButton", showQuizHome);
   }
+}
 
 
   // ---------- 顯示題目 ----------
