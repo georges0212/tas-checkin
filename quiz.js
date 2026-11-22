@@ -274,181 +274,365 @@ function callAPI(params) {
 
   
 
+
 async function startQuiz(weekNumber) {
   if (busy) return;
 
   busy = true;
+
   currentWeek = Number(weekNumber);
 
   questionSetId = "";
   questions = [];
   answers = {};
 
+  // 每週測驗不再需要閱讀挑戰識別碼
   readingChallengeId = "";
-  readingQuestions = [];
-  readingIndex = 0;
-  readingNeedsCorrection = false;
-  readingCorrectSentence = "";
 
   render(`
     <div class="loading">
-      <p>⏳ 正在啟動 AI 老師評語閱讀挑戰……</p>
-      <p>AI 正在閱讀本週教師評語，請稍候。</p>
-      <p>題目準備完成後，就可以開始作答。</p>
+      <p>⏳ 正在準備第 ${currentWeek} 週正式測驗……</p>
+      <p>AI 正在準備測驗題目，請稍候。</p>
     </div>
   `);
 
   try {
-    // 1. 呼叫後端，直接同步生成閱讀挑戰題目。
-    const startData = await callAPI({
-      action: "startReadingChallenge",
-      studentName: studentName,
-      weekNumber: String(currentWeek)
-    });
-
-    if (!startData || !startData.jobId) {
-      throw new Error(
-        startData && startData.message
-          ? startData.message
-          : "無法啟動閱讀挑戰，請重新嘗試。"
-      );
-    }
-
-    const jobId = startData.jobId;
-
-    // 後端已明確回報生成失敗，不必再輪詢。
-    if (startData.status === "failed") {
-      throw new Error(
-        startData.message || "AI 題目生成失敗，請重新嘗試。"
-      );
-    }
-
-    // 2. 取得生成結果。
-    // 同步生成完成時，通常第一次查詢就會取得 completed。
-    // 若另一個請求正在生成，則每 3 秒查詢一次。
-    let challengeData = null;
-    let attempts = 0;
-    const maxAttempts = 120;
-
-    while (attempts < maxAttempts) {
-      attempts++;
-
-      const statusData = await callAPI({
-        action: "getReadingChallengeStatus",
-        studentName: studentName,
-        weekNumber: String(currentWeek),
-        jobId: jobId
-      });
-
-      if (!statusData) {
-        throw new Error(
-          "無法取得閱讀挑戰狀態，請重新嘗試。"
-        );
-      }
-
-      if (statusData.status === "completed") {
-        challengeData = statusData;
-        break;
-      }
-
-      if (statusData.status === "failed") {
-        throw new Error(
-          statusData.message || "AI 題目生成失敗，請重新嘗試。"
-        );
-      }
-
-      if (
-        statusData.status !== "processing" &&
-        statusData.status !== "queued"
-      ) {
-        throw new Error(
-          "閱讀挑戰狀態異常，請返回測驗選單後重新嘗試。"
-        );
-      }
-
-      render(`
-        <div class="loading">
-          <p>⏳ AI 正在準備閱讀挑戰題目……</p>
-          <p>目前狀態：${statusData.status === "queued"
-            ? "等待處理"
-            : "正在生成題目"}</p>
-          <p>請稍候，不要關閉此頁面。</p>
-        </div>
-      `);
-
-      // 已完成的同步生成不需要等待；
-      // 只有仍在 processing 時才等待 3 秒。
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    }
-
-    if (!challengeData) {
-      throw new Error(
-        "題目準備時間較長，請稍候再重新進入閱讀挑戰。"
-      );
-    }
-
-    // 3. 載入三道閱讀挑戰題目。
-    readingChallengeId = challengeData.challengeId;
-
-    readingQuestions = Array.isArray(challengeData.questions)
-      ? challengeData.questions
-      : [];
-
-    if (!readingChallengeId) {
-      throw new Error("閱讀挑戰識別碼不存在，請重新嘗試。");
-    }
-
-    if (readingQuestions.length !== 3) {
-      throw new Error("閱讀挑戰必須恰好有 3 題。");
-    }
-
-    readingIndex = 0;
-    readingNeedsCorrection = false;
-    readingCorrectSentence = "";
-
-    renderReadingChallenge();
-
-  } catch (error) {
-    console.error("閱讀挑戰啟動失敗：", error);
-
-    render(`
-      <div class="error">
-        <h3>閱讀挑戰暫時無法開始</h3>
-        <p>${escapeHTML(error.message || error)}</p>
-
-        <button id="readingRetryButton" type="button">
-          重新嘗試
-        </button>
-
-        <br><br>
-
-        <button id="readingReturnButton" type="button">
-          返回測驗選單
-        </button>
-      </div>
-    `);
-
-    addBackButton("readingRetryButton", () => {
-      startQuiz(currentWeek);
-    });
-
-    addBackButton("readingReturnButton", showQuizHome);
-
+    await loadOfficialQuiz();
   } finally {
     busy = false;
   }
 }
 
+  // ---------- 閱讀挑戰獨立首頁 ----------
+
+  async function showReadingHome() {
+    studentName = getStudentName();
+
+    if (!studentName) {
+      alert("請先選擇學生並完成生日驗證。");
+      return;
+    }
+
+    render(`
+      <h1>📖 AI 老師評語閱讀</h1>
+      <h2>${escapeHTML(studentName)}</h2>
+
+      <p>請選擇目前開放的閱讀週次。</p>
+
+      <div id="readingStatus" class="loading">
+        ⏳ 正在讀取閱讀週次……
+      </div>
+
+      <div id="readingWeekList"></div>
+
+      <br>
+
+      <button id="readingHomeBack" type="button">
+        ⬅ 返回主選單
+      </button>
+    `);
+
+    addBackButton("readingHomeBack", () => {
+      if (typeof showMainMenu === "function") {
+        showMainMenu();
+      }
+    });
+
+    try {
+      const data = await callAPI({
+        action: "weeks"
+      });
+
+      const weeks = Array.isArray(data.weeks)
+        ? data.weeks
+        : [];
+
+      const openWeeks = weeks.filter(
+        week => week.isOpen === true
+      );
+
+      const status =
+        document.getElementById("readingStatus");
+
+      const list =
+        document.getElementById("readingWeekList");
+
+      if (!status || !list) return;
+
+      if (openWeeks.length === 0) {
+        status.className = "error";
+        status.textContent = "目前沒有開放中的閱讀週次。";
+        return;
+      }
+
+      status.className = "";
+      status.textContent = "請選擇閱讀週次：";
+
+      const completionResults = await Promise.all(
+  openWeeks.map(async week => {
+    try {
+      return await callAPI({
+        action: "getReadingRecord",
+        studentName: studentName,
+        weekNumber: String(week.weekNumber)
+      });
+    } catch (error) {
+      console.error("讀取閱讀完成紀錄失敗：", error);
+      return { found: false };
+    }
+  })
+);
+
+list.innerHTML = openWeeks.map((week, index) => {
+  const completed = completionResults[index]?.found === true;
+
+  return `
+    <button
+      type="button"
+      data-reading-week="${Number(week.weekNumber)}"
+      data-reading-completed="${completed}"
+      style="width:100%;margin:8px 0;"
+    >
+      ${completed
+        ? `🎉 第 ${Number(week.weekNumber)} 週已完成（查看紀錄）`
+        : `📖 第 ${Number(week.weekNumber)} 週閱讀挑戰`}
+    </button>
+  `;
+}).join("");
+
+list.querySelectorAll("[data-reading-week]")
+  .forEach(button => {
+    button.addEventListener("click", async () => {
+      const week = Number(button.dataset.readingWeek);
+
+      if (button.dataset.readingCompleted === "true") {
+        const recordData = await callAPI({
+          action: "getReadingRecord",
+          studentName: studentName,
+          weekNumber: String(week)
+        });
+
+        if (recordData.found) {
+          currentWeek = week;
+          showReadingCompleted({
+            record: recordData.record
+          });
+        }
+        return;
+      }
+
+      startIndependentReading(week);
+    });
+  });
+
+    } catch (error) {
+      const status =
+        document.getElementById("readingStatus");
+
+      if (status) {
+        status.className = "error";
+        status.textContent = error.message;
+      }
+    }
+  }
+
+
+  // ---------- 獨立啟動閱讀挑戰 ----------
+
+  async function startIndependentReading(weekNumber) {
+    if (busy) return;
+
+    busy = true;
+    currentWeek = Number(weekNumber);
+
+    readingChallengeId = "";
+    readingQuestions = [];
+    readingIndex = 0;
+    readingNeedsCorrection = false;
+    readingCorrectSentence = "";
+
+    render(`
+      <div class="loading">
+        <p>⏳ 正在準備第 ${currentWeek} 週閱讀挑戰……</p>
+        <p>請稍候。</p>
+      </div>
+    `);
+
+    try {
+      const startData = await callAPI({
+        action: "startReadingChallenge",
+        studentName: studentName,
+        weekNumber: String(currentWeek)
+      });
+
+      // 後端確認已完成，不可重新挑戰
+            // 後端確認學生已完成閱讀挑戰，不可重新挑戰
+      if (
+        startData.status === "already_completed" ||
+        startData.already_completed === true
+      ) {
+        showReadingCompleted(startData);
+        return;
+      }
+
+      if (startData.status === "failed") {
+        throw new Error(
+          startData.message || "閱讀題目生成失敗。"
+        );
+      }
+
+      if (!startData.jobId) {
+        throw new Error(
+          startData.message || "無法取得閱讀挑戰工作編號。"
+        );
+      }
+
+      const jobId = startData.jobId;
+
+      let challengeData = null;
+      let attempts = 0;
+
+      while (attempts < 120) {
+        attempts++;
+
+        const statusData = await callAPI({
+          action: "getReadingChallengeStatus",
+          studentName: studentName,
+          weekNumber: String(currentWeek),
+          jobId: jobId
+        });
+
+        if (statusData.status === "completed") {
+          challengeData = statusData;
+          break;
+        }
+
+        if (statusData.status === "failed") {
+          throw new Error(
+            statusData.message || "閱讀題目生成失敗。"
+          );
+        }
+
+        if (
+          statusData.status !== "processing" &&
+          statusData.status !== "queued"
+        ) {
+          throw new Error("閱讀挑戰狀態異常。");
+        }
+
+        render(`
+          <div class="loading">
+            <p>⏳ AI 正在準備閱讀挑戰題目……</p>
+            <p>請稍候，不要關閉此頁面。</p>
+          </div>
+        `);
+
+        await new Promise(resolve =>
+          setTimeout(resolve, 3000)
+        );
+      }
+
+      if (!challengeData) {
+        throw new Error(
+          "題目準備時間較長，請稍後再進入閱讀挑戰。"
+        );
+      }
+
+      readingChallengeId = challengeData.challengeId;
+
+      readingQuestions = Array.isArray(challengeData.questions)
+        ? challengeData.questions
+        : [];
+
+      if (!readingChallengeId || readingQuestions.length !== 3) {
+        throw new Error("閱讀挑戰題目資料不完整。");
+      }
+
+      readingIndex = 0;
+      readingNeedsCorrection = false;
+      readingCorrectSentence = "";
+
+      renderReadingChallenge();
+
+    } catch (error) {
+      console.error("閱讀挑戰啟動失敗：", error);
+
+      render(`
+        <div class="error">
+          <h3>閱讀挑戰暫時無法開始</h3>
+          <p>${escapeHTML(error.message || error)}</p>
+
+          <button id="readingRetryButton" type="button">
+            重新嘗試
+          </button>
+
+          <br><br>
+
+          <button id="readingReturnButton" type="button">
+            返回閱讀選單
+          </button>
+        </div>
+      `);
+
+      addBackButton("readingRetryButton", () => {
+        startIndependentReading(currentWeek);
+      });
+
+      addBackButton("readingReturnButton", showReadingHome);
+
+    } finally {
+      busy = false;
+    }
+  }
+
+
+  // ---------- 閱讀完成畫面 ----------
+
+  function showReadingCompleted(data = {}) {
+    render(`
+      <div class="success">
+        <h1>🎉 閱讀挑戰完成！</h1>
+
+        <h2>第 ${currentWeek} 週</h2>
+
+        <p>學生：${escapeHTML(studentName)}</p>
+
+        <p>
+  ${(data.record && data.record.completedAt)
+    ? "完成時間：" + escapeHTML(
+        data.record.completedAt instanceof Date
+          ? data.record.completedAt.toLocaleString("zh-TW")
+          : String(data.record.completedAt)
+      )
+    : "本週三道閱讀題目均已完成。"}
+</p>
+
+        <p>
+          你已完成本週閱讀挑戰，
+          不能再次進行挑戰。
+        </p>
+      </div>
+
+      <button id="readingCompletedBack" type="button">
+        返回閱讀選單
+      </button>
+    `);
+
+    addBackButton(
+      "readingCompletedBack",
+      showReadingHome
+    );
+  }
 
   // ---------- 顯示閱讀挑戰 ----------
 
   function renderReadingChallenge() {
     const q = readingQuestions[readingIndex];
 
-    if (!q) {
-      loadOfficialQuiz();
-      return;
-    }
+if (!q) {
+  showReadingHome();
+  return;
+}
 
     const options = [
       ["A", q.optionA],
@@ -585,8 +769,8 @@ async function startQuiz(weekNumber) {
       </button>
     `);
 
-    addBackButton("readingCancelButton", showQuizHome);
-
+addBackButton("readingCancelButton", showReadingHome);
+     
     if (readingNeedsCorrection) {
       addBackButton(
         "readingCorrectionButton",
@@ -628,14 +812,14 @@ async function startQuiz(weekNumber) {
 
     try {
       const data = await callAPI({
-        action: "checkReadingAnswer",
-        studentName: studentName,
-        weekNumber: String(currentWeek),
-        challengeId: readingChallengeId,
-        questionIndex: String(readingIndex),
-        selectedAnswer: selected.value,
-        correctionSentence: ""
-      });
+  action: "checkReadingAnswer",
+  studentName: studentName,
+  weekNumber: String(currentWeek),
+  challengeId: readingChallengeId,
+  questionNumber: String(readingIndex + 1),
+  mode: "choice",
+  answer: selected.value
+});
 
       if (data.passed === true) {
         readingIndex++;
@@ -643,10 +827,19 @@ async function startQuiz(weekNumber) {
         readingCorrectSentence = "";
 
         if (readingIndex >= readingQuestions.length) {
-          await loadOfficialQuiz();
-        } else {
-          renderReadingChallenge();
-        }
+  const recordData = await callAPI({
+    action: "getReadingRecord",
+    studentName: studentName,
+    weekNumber: String(currentWeek)
+  });
+
+  showReadingCompleted({
+    record: recordData.record
+  });
+} else {
+  renderReadingChallenge();
+}
+
 
         return;
       }
@@ -721,14 +914,14 @@ async function startQuiz(weekNumber) {
 
     try {
       const data = await callAPI({
-        action: "checkReadingAnswer",
-        studentName: studentName,
-        weekNumber: String(currentWeek),
-        challengeId: readingChallengeId,
-        questionIndex: String(readingIndex),
-        selectedAnswer: "",
-        correctionSentence: input.value
-      });
+  action: "checkReadingAnswer",
+  studentName: studentName,
+  weekNumber: String(currentWeek),
+  challengeId: readingChallengeId,
+  questionNumber: String(readingIndex + 1),
+  mode: "correction",
+  answer: input.value
+});
 
       if (
         data.passed === true ||
@@ -739,10 +932,18 @@ async function startQuiz(weekNumber) {
         readingCorrectSentence = "";
 
         if (readingIndex >= readingQuestions.length) {
-          await loadOfficialQuiz();
-        } else {
-          renderReadingChallenge();
-        }
+  const recordData = await callAPI({
+    action: "getReadingRecord",
+    studentName: studentName,
+    weekNumber: String(currentWeek)
+  });
+
+  showReadingCompleted({
+    record: recordData.record
+  });
+} else {
+  renderReadingChallenge();
+}
 
         return;
       }
@@ -784,15 +985,9 @@ async function startQuiz(weekNumber) {
 
   // ---------- 閱讀挑戰通過，開啟正式測驗 ----------
 
-  
 async function loadOfficialQuiz() {
   render(`
-    <h1>🎉 閱讀挑戰完成！</h1>
-
-    <div class="success">
-      <p>所有閱讀題目都已經通過。</p>
-      <p>現在為你開啟正式的 10 題測驗。</p>
-    </div>
+    <h1>📝 第 ${currentWeek} 週測驗</h1>
 
     <div class="loading">
       ⏳ 正在準備正式測驗題目……
@@ -800,18 +995,10 @@ async function loadOfficialQuiz() {
   `);
 
   try {
-    // 確認閱讀挑戰已經有通關識別碼
-    if (!readingChallengeId) {
-      throw new Error(
-        "閱讀挑戰通關資料不存在，無法開啟正式測驗。"
-      );
-    }
-
     const data = await callAPI({
       action: "getQuiz",
       studentName: studentName,
-      weekNumber: String(currentWeek),
-      challengeId: readingChallengeId
+      weekNumber: String(currentWeek)
     });
 
     questionSetId = String(data.questionSetId || "");
@@ -848,6 +1035,9 @@ async function loadOfficialQuiz() {
     addBackButton("quizReturnButton", showQuizHome);
   }
 }
+
+  
+
 
 
   // ---------- 顯示題目 ----------
@@ -1043,9 +1233,9 @@ async function loadOfficialQuiz() {
   studentName: studentName,
   weekNumber: String(currentWeek),
   questionSetId: questionSetId,
-  challengeId: readingChallengeId,
   answers: JSON.stringify(orderedAnswers)
 });
+       
        
 
       render(`
@@ -1317,40 +1507,54 @@ async function showQuizAnswers(submissionId) {
 
 // ---------- 將測驗按鈕加入原本主選單 ----------
    
-  // ---------- 將測驗按鈕加入原本主選單 ----------
-  // 不修改原本主選單的 HTML 或其他按鈕。
 
   function addQuizButton() {
     const menu = document.querySelector("#app .menu");
 
-    if (
-      !menu ||
-      document.getElementById("tasWeeklyQuizButton")
-    ) {
-      return;
+    if (!menu) return;
+
+    // 每週測驗按鈕
+    if (!document.getElementById("tasWeeklyQuizButton")) {
+      const quizButton = document.createElement("button");
+
+      quizButton.id = "tasWeeklyQuizButton";
+      quizButton.type = "button";
+      quizButton.textContent = "📝 每週測驗 Weekly Quiz";
+
+      quizButton.addEventListener("click", showQuizHome);
+
+      const feedbackButton =
+        document.getElementById("feedbackButton");
+
+      if (
+        feedbackButton &&
+        feedbackButton.parentNode === menu
+      ) {
+        menu.insertBefore(quizButton, feedbackButton);
+      } else {
+        menu.appendChild(quizButton);
+      }
     }
 
-    const button = document.createElement("button");
+    // AI 老師評語閱讀按鈕
+    if (!document.getElementById("tasReadingButton")) {
+      const readingButton = document.createElement("button");
 
-    button.id = "tasWeeklyQuizButton";
-    button.type = "button";
-    button.textContent = "📝 每週測驗 Weekly Quiz";
+      readingButton.id = "tasReadingButton";
+      readingButton.type = "button";
+      readingButton.textContent =
+        "📖 AI 老師評語閱讀 Reading Challenge";
 
-    button.addEventListener("click", showQuizHome);
+      readingButton.addEventListener(
+        "click",
+        showReadingHome
+      );
 
-    const feedbackButton =
-      document.getElementById("feedbackButton");
-
-    if (
-      feedbackButton &&
-      feedbackButton.parentNode === menu
-    ) {
-      menu.insertBefore(button, feedbackButton);
-    } else {
-      menu.appendChild(button);
+      menu.appendChild(readingButton);
     }
   }
 
+   
   // 原本 script.js 會動態更新畫面，因此監測主選單。
   const observer = new MutationObserver(addQuizButton);
 
