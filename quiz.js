@@ -1508,7 +1508,8 @@ async function showQuizAnswers(submissionId) {
 // ---------- 將測驗按鈕加入原本主選單 ----------
    
 
-  function addQuizButton() {
+  
+function addQuizButton() {
     const menu = document.querySelector("#app .menu");
 
     if (!menu) return;
@@ -1519,7 +1520,7 @@ async function showQuizAnswers(submissionId) {
 
       quizButton.id = "tasWeeklyQuizButton";
       quizButton.type = "button";
-      quizButton.textContent = "📝 每週測驗 Weekly Quiz";
+      quizButton.textContent = "📝 Weekly Quiz 每週測驗 ";
 
       quizButton.addEventListener("click", showQuizHome);
 
@@ -1536,23 +1537,14 @@ async function showQuizAnswers(submissionId) {
       }
     }
 
-    // AI 老師評語閱讀按鈕
-    if (!document.getElementById("tasReadingButton")) {
-      const readingButton = document.createElement("button");
+    // 暫時隱藏 AI 老師評語閱讀功能
+    const readingButton =
+      document.getElementById("tasReadingButton");
 
-      readingButton.id = "tasReadingButton";
-      readingButton.type = "button";
-      readingButton.textContent =
-        "📖 AI 老師評語閱讀 Reading Challenge";
-
-      readingButton.addEventListener(
-        "click",
-        showReadingHome
-      );
-
-      menu.appendChild(readingButton);
+    if (readingButton) {
+      readingButton.remove();
     }
-  }
+}
 
    
   // 原本 script.js 會動態更新畫面，因此監測主選單。
